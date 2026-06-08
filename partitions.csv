@@ -1,0 +1,7 @@
+# OTA not implemented on MVP (reserved for future: split app0 into ota_0+ota_1 and re-add otadata row)
+# name,    type,subtype, offset,   size
+nvs,      data,nvs,     0x9000,   0x10000
+nvs_keys, data,nvs_keys,0x19000,  0x1000
+app0,     app, factory, 0x20000,  0x3F0000
+coredump, data,coredump,0x410000, 0x10000
+spiffs,   data,spiffs,  0x420000, 0xBE0000

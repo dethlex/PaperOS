@@ -1,0 +1,9 @@
+.pio/
+.vscode/
+.idea/
+*.bin
+!data/default_wallpaper.bin
+*.elf
+*.map
+.DS_Store
+compile_commands.json

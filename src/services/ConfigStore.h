@@ -1,0 +1,80 @@
+#pragma once
+#include <string>
+#include <stdint.h>
+#include "services/ConfigJson.h"
+
+namespace paperos {
+
+class Nvs;
+class Sd;
+
+// Typed facade over Nvs. Config-поля зеркалируются в /paperos/config.json
+// (авто-save при изменении + двусторонний syncWithFile). Runtime-поля — только NVS.
+class ConfigStore {
+public:
+    ConfigStore(Nvs& nvs, Sd& sd) : nvs_(nvs), sd_(sd) {}
+
+    // Wifi
+    std::string wifiSsid();   void setWifiSsid(const std::string&);
+    std::string wifiPass();   void setWifiPass(const std::string&);
+
+    // Home Assistant
+    std::string haUrl();      void setHaUrl(const std::string&);
+    std::string haToken();    void setHaToken(const std::string&);
+
+    // Reader
+    uint8_t fontSize();       void setFontSize(uint8_t v);     // 0=S,1=M,2=L
+    uint8_t marginPx();       void setMarginPx(uint8_t v);
+
+    // Screensaver
+    uint16_t screensaverIdleS();  void setScreensaverIdleS(uint16_t s);
+    uint16_t photoRotateMin();    void setPhotoRotateMin(uint16_t m);
+
+    // Time
+    int8_t tzOffsetHours();   void setTzOffsetHours(int8_t h);
+
+    // Language (0 = Ru, 1 = En)
+    uint8_t language();       void setLanguage(uint8_t v);
+
+    // Weather
+    std::string weatherLat();        void setWeatherLat(const std::string&);
+    std::string weatherLon();        void setWeatherLon(const std::string&);
+    uint16_t    weatherRefreshMin(); void setWeatherRefreshMin(uint16_t m);
+    int8_t      indoorTempOffset();  void setIndoorTempOffset(int8_t v);
+    void   putWeatherCache(const void* data, size_t len);
+    size_t getWeatherCache(void* out, size_t maxLen);
+
+    // Boot/runtime state — NOT mirrored to config.json.
+    uint16_t photoIndex();    void setPhotoIndex(uint16_t v);
+    uint8_t  lastAppIndex();  void setLastAppIndex(uint8_t v);
+
+    // Reader bookmark — NOT mirrored.
+    std::string lastBookPath();   void setLastBookPath(const std::string&);
+    uint32_t    lastBookOffset(); void setLastBookOffset(uint32_t off);
+
+    // HA per-entity state cache — NOT mirrored.
+    void putEntityState(const char* entityId, const void* data, size_t len);
+    size_t getEntityState(const char* entityId, void* out, size_t maxLen);
+
+    // --- config.json mirror ---
+    Config snapshot();                 // прочитать все config-поля из NVS
+    void   applyConfig(const Config&); // записать все config-поля в NVS (без per-setter save)
+    bool   syncWithFile();             // файл↔NVS (бут + кнопка). false: нет SD или битый JSON.
+
+    // Defaults
+    static constexpr uint8_t  kDefaultFontSize   = 1;
+    static constexpr uint8_t  kDefaultMarginPx   = 24;
+    static constexpr uint16_t kDefaultIdleS      = 300;
+    static constexpr uint16_t kDefaultRotateMin  = 30;
+    static constexpr int8_t   kDefaultTzOffsetH  = 3;
+    static constexpr uint16_t kDefaultWeatherRefreshMin = 30;
+    static constexpr int8_t   kDefaultIndoorTempOffset = -2;
+
+private:
+    void persistToFile();              // serializeConfig(snapshot()) → writeAtomic (no-op без SD)
+    Nvs& nvs_;
+    Sd&  sd_;
+    bool persist_enabled_ = true;      // подавляет авто-save во время applyConfig
+};
+
+} // namespace paperos
