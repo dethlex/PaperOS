@@ -8,8 +8,8 @@ namespace paperos {
 class Nvs;
 class Sd;
 
-// Typed facade over Nvs. Config-поля зеркалируются в /paperos/config.json
-// (авто-save при изменении + двусторонний syncWithFile). Runtime-поля — только NVS.
+// Typed facade over Nvs. Config fields are mirrored to /paperos/config.json
+// (auto-save on change + bidirectional syncWithFile). Runtime fields live in NVS only.
 class ConfigStore {
 public:
     ConfigStore(Nvs& nvs, Sd& sd) : nvs_(nvs), sd_(sd) {}
@@ -57,9 +57,9 @@ public:
     size_t getEntityState(const char* entityId, void* out, size_t maxLen);
 
     // --- config.json mirror ---
-    Config snapshot();                 // прочитать все config-поля из NVS
-    void   applyConfig(const Config&); // записать все config-поля в NVS (без per-setter save)
-    bool   syncWithFile();             // файл↔NVS (бут + кнопка). false: нет SD или битый JSON.
+    Config snapshot();                 // read all config fields from NVS
+    void   applyConfig(const Config&); // write all config fields to NVS (no per-setter save)
+    bool   syncWithFile();             // file<->NVS (boot + button). false: no SD or malformed JSON.
 
     // Defaults
     static constexpr uint8_t  kDefaultFontSize   = 1;
@@ -71,10 +71,10 @@ public:
     static constexpr int8_t   kDefaultIndoorTempOffset = -2;
 
 private:
-    void persistToFile();              // serializeConfig(snapshot()) → writeAtomic (no-op без SD)
+    void persistToFile();              // serializeConfig(snapshot()) -> writeAtomic (no-op without SD)
     Nvs& nvs_;
     Sd&  sd_;
-    bool persist_enabled_ = true;      // подавляет авто-save во время applyConfig
+    bool persist_enabled_ = true;      // suppresses auto-save during applyConfig
 };
 
 } // namespace paperos

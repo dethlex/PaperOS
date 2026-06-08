@@ -80,7 +80,7 @@ bool Sd::stat(const char* path, bool& isDir, uint32_t& size, uint32_t& mtime) {
     if (!f) return false;
     isDir = f.isDirectory();
     size  = isDir ? 0 : static_cast<uint32_t>(f.size());
-    mtime = static_cast<uint32_t>(f.getLastWrite());   // 0, если ФС не хранит
+    mtime = static_cast<uint32_t>(f.getLastWrite());   // 0 if the filesystem doesn't store it
     f.close();
     return true;
 }
@@ -92,8 +92,8 @@ std::vector<Sd::DirEntry> Sd::listDir(const char* path) {
     if (!d || !d.isDirectory()) { if (d) d.close(); return out; }
     File f;
     while ((f = d.openNextFile())) {
-        const char* name = f.name();      // basename на pinned SDK
-        if (name[0] != '.') {             // скрытые / AppleDouble пропускаем
+        const char* name = f.name();      // basename on pinned SDK
+        if (name[0] != '.') {             // skip hidden / AppleDouble files
             DirEntry e;
             e.name  = name;
             e.isDir = f.isDirectory();
@@ -123,10 +123,10 @@ bool Sd::removeTree(const char* path) {
     File d = SD.open(path, FILE_READ);
     if (!d) return false;
     if (!d.isDirectory()) { d.close(); return SD.remove(path); }
-    // Снимок детей при открытой ручке, ЗАТЕМ закрываем d перед рекурсией:
-    // у FAT-драйвера лимит одновременно открытых дескрипторов (~10), и держать
-    // d открытой во время рекурсии исчерпало бы их на глубоком дереве (тогда
-    // openNextFile молча отдаёт пустые File и листинг обрывается).
+    // Snapshot children while the handle is open, THEN close d before recursing:
+    // the FAT driver caps concurrently open descriptors (~10), and keeping d open
+    // during recursion would exhaust them on a deep tree (then openNextFile
+    // silently returns empty File handles and the listing is cut short).
     std::vector<std::pair<std::string, bool>> kids;
     File f;
     while ((f = d.openNextFile())) {

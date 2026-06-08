@@ -18,15 +18,15 @@ public:
     // Write file atomically: write `.tmp`, then rename.
     bool writeAtomic(const char* path, const uint8_t* data, size_t len);
 
-    // --- WebDAV-примитивы ---
+    // --- WebDAV primitives ---
     bool exists(const char* path);
-    // false, если пути нет. Иначе заполняет isDir/size/mtime.
+    // false if the path doesn't exist. Otherwise fills isDir/size/mtime.
     bool stat(const char* path, bool& isDir, uint32_t& size, uint32_t& mtime);
-    // Содержимое папки (файлы И подпапки, без фильтра по расширению). Скрытые/AppleDouble пропускаются.
+    // Directory contents (files AND subdirs, no extension filter). Hidden/AppleDouble skipped.
     std::vector<DirEntry> listDir(const char* path);
     bool makeDir(const char* path);      // MKCOL
-    bool removePath(const char* path);   // файл или пустая папка
-    bool removeTree(const char* path);   // рекурсивно (DELETE папки)
+    bool removePath(const char* path);   // file or empty directory
+    bool removeTree(const char* path);   // recursive (DELETE of a directory)
     bool renamePath(const char* from, const char* to);  // MOVE
     File openRead(const char* path);     // GET (FILE_READ)
     File openWrite(const char* path);    // PUT (FILE_WRITE, truncate)

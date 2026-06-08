@@ -7,7 +7,7 @@ struct DayForecast {
     int16_t tmax_c   = 0;
     int16_t tmin_c   = 0;
     uint8_t wmo_code = 0;
-    uint8_t weekday  = 0;   // 0=Пн … 6=Вс
+    uint8_t weekday  = 0;   // 0=Mon ... 6=Sun
 };
 
 struct HourForecast {

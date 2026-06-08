@@ -4,7 +4,7 @@
 
 namespace paperos {
 
-// Пользовательский конфиг (без runtime-состояния). Дефолты = дефолты ConfigStore.
+// User config (no runtime state). Defaults match ConfigStore's defaults.
 struct Config {
     std::string wifiSsid, wifiPass;
     std::string haUrl, haToken;
@@ -19,12 +19,12 @@ struct Config {
     uint8_t     language          = 1;   // 0 = Ru, 1 = En (default En)
 };
 
-// Полный конфиг → JSON (вложенная схема).
+// Full config -> JSON (nested schema).
 std::string serializeConfig(const Config& c);
 
-// Накладывает на `io` присутствующие НЕПУСТЫЕ строки и присутствующие числа
-// (с валидацией диапазона). Пустые строки и отсутствующие ключи `io` не меняют.
-// Возвращает false при ошибке разбора JSON (io не трогается).
+// Merges into `io` the present NON-EMPTY strings and present numbers
+// (range-validated). Empty strings and absent keys leave `io` unchanged.
+// Returns false on JSON parse error (io is left untouched).
 bool parseConfigMerge(const std::string& json, Config& io);
 
 } // namespace paperos

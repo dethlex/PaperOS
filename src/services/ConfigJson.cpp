@@ -62,7 +62,7 @@ bool parseConfigMerge(const std::string& json, Config& io) {
     }
     if (doc["screensaver"]["idle_s"].is<int>()) {
         int i = doc["screensaver"]["idle_s"].as<int>();
-        // верхняя граница = max uint16_t (тип поля); иначе каст молча обрезал бы
+        // upper bound = uint16_t max (the field type); otherwise the cast would silently truncate
         if (i >= 30 && i <= 65535) io.screensaverIdleS = static_cast<uint16_t>(i);
     }
     if (doc["screensaver"]["rotate_min"].is<int>()) {

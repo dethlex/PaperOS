@@ -13,9 +13,9 @@
 
 namespace paperos {
 
-// Status-уголок в шапке: время + батарея. Все значения кратны 4
-// (требование WritePartGram4bpp для partial-push). Не пересекается с заголовком
-// (слева, x=30) и карточками (y>=80).
+// Status corner in the header: time + battery. All values are multiples of 4
+// (WritePartGram4bpp requirement for partial-push). Does not overlap the title
+// (left, x=30) or the cards (y>=80).
 static constexpr int kStatusX = 284;
 static constexpr int kStatusY = 0;
 static constexpr int kStatusW = 256;
@@ -34,10 +34,10 @@ void Launcher::drawStatus(M5EPD_Canvas& target, AppContext& ctx, int ox, int oy)
     target.drawString(hhmm, (kStatusX + 4) - ox, (kStatusY + 16) - oy);
 
     BatteryReading bat = ctx.battery.read();
-    // Иконка по центру строки часов: clock(32px)@+16 → центр +32; icon(26) → top +19.
+    // Icon centered on the clock line: clock(32px)@+16 → center +32; icon(26) → top +19.
     IconKit::battery(target, (kStatusX + 110) - ox, (kStatusY + 19) - oy, 56, 26, bat.percent);
     char bs[8]; snprintf(bs, sizeof(bs), "%u%%", bat.percent);
-    fonts.apply(target, FontFace::Serif, 22);   // мельче (было 28) — "100%" больше не упирается в правый край
+    fonts.apply(target, FontFace::Serif, 22);   // small enough that "100%" no longer hits the right edge
     target.drawString(bs, (kStatusX + 176) - ox, (kStatusY + 20) - oy);
 }
 
@@ -166,14 +166,15 @@ void Launcher::scrollBy(int dir, AppContext& ctx) {
 
 void Launcher::tick(AppContext& ctx) {
     int m = ctx.rtc.minute();
-    if (m == last_minute_) return;     // меняем уголок только на границе минуты
+    if (m == last_minute_) return;     // update the corner only on a minute boundary
     last_minute_ = m;
 
-    // Выделенный sub-canvas только под status-уголок (живёт в PSRAM, аллоцируется
-    // один раз). Фон под уголком — чистый белый, кэш не нужен: заливаем 0 и рисуем.
-    // Display форсит FULL раз в N partial'ов, но только в пределах этого rect'а —
-    // ghosting карточек снимает лишь следующий renderAll (полный GC16); на практике
-    // это ограничено idle-таймаутом (лаунчер уходит в скринсейвер раньше).
+    // Dedicated sub-canvas for the status corner only (lives in PSRAM, allocated
+    // once). The background under the corner is plain white, so no cache is needed:
+    // fill 0 and draw. Display forces a FULL every N partials, but only within this
+    // rect — card ghosting is cleared only by the next renderAll (full GC16); in
+    // practice this is bounded by the idle timeout (the launcher drops to the
+    // screensaver sooner).
     static M5EPD_Canvas status_canvas(&M5.EPD);
     static bool ready = false;
     if (!ready) { status_canvas.createCanvas(kStatusW, kStatusH); ready = true; }

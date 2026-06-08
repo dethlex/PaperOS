@@ -3,8 +3,8 @@
 
 namespace paperos {
 
-// Оценка заряда (%) одной Li-Po банки по напряжению покоя (мВ).
-// Кусочно-линейная интерполяция по зашитой таблице, результат клампится 0..100.
+// Estimate charge (%) of a single Li-Po cell from its resting voltage (mV).
+// Piecewise-linear interpolation over a hardcoded table; result clamped to 0..100.
 uint8_t batteryPercentFromMv(uint16_t mv);
 
 } // namespace paperos

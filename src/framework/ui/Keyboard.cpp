@@ -107,7 +107,7 @@ static bool isSpecialToken(const std::string& k) {
            k == "RU"  || k == "EN"  || k == "SPACE";
 }
 
-// UTF-8 uppercase for letter keys. Handles ASCII a-z and Russian а-я + ё.
+// UTF-8 uppercase for letter keys. Handles ASCII a-z and the Russian alphabet (a-ya + yo).
 // Anything else (digits, punctuation, symbols) is passed through unchanged.
 static std::string toUpperUtf8(const std::string& s) {
     std::string out;
@@ -123,8 +123,8 @@ static std::string toUpperUtf8(const std::string& s) {
             uint32_t cp = (static_cast<uint32_t>(b & 0x1F) << 6) |
                           (static_cast<uint8_t>(s[i + 1]) & 0x3F);
             uint32_t upper = cp;
-            if      (cp >= 0x0430 && cp <= 0x044F) upper = cp - 0x20;  // а..я → А..Я
-            else if (cp == 0x0451)                 upper = 0x0401;     // ё → Ё
+            if      (cp >= 0x0430 && cp <= 0x044F) upper = cp - 0x20;  // lowercase Cyrillic a..ya -> uppercase
+            else if (cp == 0x0451)                 upper = 0x0401;     // yo -> uppercase Yo
             if (upper < 0x80) {
                 out.push_back(static_cast<char>(upper));
             } else {

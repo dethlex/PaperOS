@@ -47,7 +47,7 @@ void FileServerApp::drawStatus(AppContext& ctx, const char* url) {
 
 void FileServerApp::enter(AppContext& ctx) {
     if (!ctx.sd.present()) {
-        // Без карты сервер бессмысленен: корень /paperos недоступен, всё 404-ит.
+        // Without a card the server is pointless: the /paperos root is missing, everything 404s.
         drawMessage(ctx, tr(Str::common_no_sd), tr(Str::fs_insert_card));
         return;
     }
@@ -60,13 +60,14 @@ void FileServerApp::enter(AppContext& ctx) {
         drawMessage(ctx, tr(Str::fs_connect_fail), tr(Str::fs_check_wifi));
         return;
     }
-    // Рисуем статус ДО старта сервера — это последний EPD-push (см. спек §4.1:
-    // SD и EPD делят SPI, нельзя пушить EPD пока httpd-таск может писать SD).
+    // Draw the status BEFORE starting the server — this is the last EPD push (see
+    // spec §4.1: SD and EPD share SPI, so we can't push EPD while the httpd task may
+    // be writing SD).
     std::string url = "http://" + ctx.wifi.ipString() + "/";
     drawStatus(ctx, url.c_str());
 
     if (!ctx.webdav.start(80)) {
-        ctx.wifi.disconnect();                 // сервер не стартовал → EPD-push безопасен
+        ctx.wifi.disconnect();                 // server didn't start → EPD push is safe
         drawMessage(ctx, tr(Str::fs_server_fail), nullptr);
         return;
     }
@@ -74,17 +75,17 @@ void FileServerApp::enter(AppContext& ctx) {
 }
 
 void FileServerApp::teardown(AppContext& ctx) {
-    if (ctx.webdav.running()) ctx.webdav.stop();   // СТОП сервера до любого следующего EPD-push
+    if (ctx.webdav.running()) ctx.webdav.stop();   // stop server before any subsequent EPD push
     ctx.wifi.disconnect();
 }
 
 bool FileServerApp::onBack(AppContext& ctx) {
     teardown(ctx);
-    return false;   // верхний уровень → InputRouter уводит в лаунчер (тот рендерит после teardown)
+    return false;   // top level → InputRouter goes to the launcher (which renders after teardown)
 }
 
 void FileServerApp::leave(AppContext& ctx) {
-    teardown(ctx);  // на случай иного пути выхода; идемпотентно
+    teardown(ctx);  // in case of an alternate exit path; idempotent
 }
 
 } // namespace paperos

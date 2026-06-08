@@ -8,7 +8,7 @@ namespace paperos {
 
 static constexpr const char* kConfigPath = "/paperos/config.json";
 
-// Config-поля: после записи в NVS зеркалим в файл (если включено).
+// Config fields: after writing to NVS, mirror to the file (if enabled).
 std::string ConfigStore::wifiSsid()      { return nvs_.getString("wifi_ssid"); }
 void ConfigStore::setWifiSsid(const std::string& v) { nvs_.putString("wifi_ssid", v); if (persist_enabled_) persistToFile(); }
 std::string ConfigStore::wifiPass()      { return nvs_.getString("wifi_pass"); }
@@ -46,7 +46,7 @@ void ConfigStore::setWeatherRefreshMin(uint16_t m) { nvs_.putU16("wx_refresh", m
 int8_t ConfigStore::indoorTempOffset()  { return static_cast<int8_t>(nvs_.getU8("in_toff", static_cast<uint8_t>(kDefaultIndoorTempOffset))); }
 void ConfigStore::setIndoorTempOffset(int8_t v) { nvs_.putU8("in_toff", static_cast<uint8_t>(v)); if (persist_enabled_) persistToFile(); }
 
-// Runtime-поля: НЕ зеркалим (высокочастотные/внутренние).
+// Runtime fields: NOT mirrored (high-frequency / internal).
 std::string ConfigStore::lastBookPath()  { return nvs_.getString("last_book"); }
 void ConfigStore::setLastBookPath(const std::string& v) { nvs_.putString("last_book", v); }
 uint32_t ConfigStore::lastBookOffset()   { return nvs_.getU32("last_off", 0); }
@@ -87,7 +87,7 @@ Config ConfigStore::snapshot() {
 }
 
 void ConfigStore::applyConfig(const Config& c) {
-    persist_enabled_ = false;        // одна запись файла снаружи, не по сеттеру
+    persist_enabled_ = false;        // single file write done externally, not per-setter
     setWifiSsid(c.wifiSsid); setWifiPass(c.wifiPass);
     setHaUrl(c.haUrl); setHaToken(c.haToken);
     setTzOffsetHours(c.tzOffsetHours);
@@ -110,13 +110,13 @@ bool ConfigStore::syncWithFile() {
     if (!sd_.present()) return false;
     Config cfg = snapshot();
     std::vector<uint8_t> buf;
-    size_t n = sd_.readAll(kConfigPath, buf);     // 0, если файла нет/пуст/ошибка
+    size_t n = sd_.readAll(kConfigPath, buf);     // 0 if file is missing/empty/error
     if (n > 0) {
         std::string json(reinterpret_cast<const char*>(buf.data()), n);
-        if (!parseConfigMerge(json, cfg)) return false;   // битый JSON: NVS и файл не трогаем
-        applyConfig(cfg);                                  // непустые поля файла → NVS
+        if (!parseConfigMerge(json, cfg)) return false;   // malformed JSON: leave NVS and file untouched
+        applyConfig(cfg);                                  // non-empty file fields -> NVS
     }
-    std::string out = serializeConfig(cfg);                // полный конфиг обратно (создаёт файл, если не было)
+    std::string out = serializeConfig(cfg);                // write full config back (creates the file if absent)
     sd_.writeAtomic(kConfigPath, reinterpret_cast<const uint8_t*>(out.data()), out.size());
     return true;
 }

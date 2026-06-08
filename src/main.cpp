@@ -153,9 +153,9 @@ void setup() {
         g_router.resetIdle();                          // start the timer from "now", not millis()=0
     }
 
-    // Подтянуть config.json с карты в NVS (и переписать полный конфиг обратно) ДО
-    // bootSync — чтобы WiFi-креды из файла применились до подъёма WiFi на старте.
-    // No-op без SD. Внешние правки config.json (в т.ч. по WebDAV) подхватываются здесь.
+    // Pull config.json from the card into NVS (and write the full config back) BEFORE
+    // bootSync, so WiFi creds from the file apply before WiFi comes up at boot.
+    // No-op without SD. External edits to config.json (incl. over WebDAV) are picked up here.
     g_config.syncWithFile();
     paperos::i18nSetLang(static_cast<paperos::Lang>(g_config.language()));
 
@@ -181,7 +181,7 @@ void loop() {
 
     if (idle) {
         if (auto* a = g_switcher.current(); a && a->keepAwake()) {
-            // Апп просит не засыпать (раздаёт файлы) — продлеваем idle-окно.
+            // App asks to stay awake (serving files) — extend the idle window.
             g_router.resetIdle();
         } else {
             // Save last app index to NVS before switching; switchTo() handles leave()

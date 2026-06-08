@@ -64,8 +64,8 @@ public:
     // already at its top level — InputRouter then goes to Launcher, or to the
     // lock screen (screensaver) if the app already is Launcher.
     virtual bool onBack(AppContext&) { return false; }
-    // Если true, InputRouter idle НЕ уводит в скринсейвер (таймер просто
-    // сбрасывается). Для аппов с фоновой активностью без ввода (файл-сервер).
+    // If true, InputRouter idle does NOT go to the screensaver (the timer just
+    // resets). For apps with background activity but no input (file server).
     virtual bool keepAwake() const { return false; }
     virtual const char* id() const = 0;
     virtual const char* title() const = 0;

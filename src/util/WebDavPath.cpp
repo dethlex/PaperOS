@@ -48,20 +48,20 @@ std::string urlEncode(const std::string& in) {
 }
 
 bool mapUrlToSdPath(const std::string& urlPath, std::string& outSdPath) {
-    outSdPath.clear();   // при любом false-возврате выход остаётся пустым
+    outSdPath.clear();   // on any false return the output stays empty
     std::string decoded = urlDecode(urlPath);
     if (decoded.find('\0') != std::string::npos) return false;
 
     std::vector<std::string> segs;
     size_t i = 0;
     while (i < decoded.size()) {
-        while (i < decoded.size() && decoded[i] == '/') ++i;   // съесть слэши
+        while (i < decoded.size() && decoded[i] == '/') ++i;   // eat slashes
         size_t start = i;
         while (i < decoded.size() && decoded[i] != '/') ++i;
         if (i > start) {
             std::string seg = decoded.substr(start, i - start);
-            if (seg == ".") continue;          // текущая папка — пропустить
-            if (seg == "..") return false;      // traversal — строго запрещён
+            if (seg == ".") continue;          // current dir — skip
+            if (seg == "..") return false;      // traversal — strictly forbidden
             segs.push_back(seg);
         }
     }

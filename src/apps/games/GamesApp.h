@@ -9,7 +9,7 @@
 
 namespace paperos {
 
-// Launcher app «Игры»: a tappable menu of four games (Menu) and the active game
+// Launcher app "Games": a tappable menu of four games (Menu) and the active game
 // (InGame). G38/onBack steps InGame->Menu->Launcher. Games are held as members
 // (no heap churn); current_ points at the active one.
 class GamesApp : public IApp {

@@ -182,13 +182,13 @@ static void drawWeatherPanel(M5EPD_Canvas& target, AppContext& ctx, int ox, int 
     IconKit::house(target, px + 12, py + 72, 56);
     drawWeatherRow(target, fonts, px, py + 72, in.valid, in.temp_c, in.humidity);
 
-    // Battery — правая свободная зона панели (layout «иконки+значения» оставил её
-    // пустой). Обновляется тем же ежеминутным partial-push'ем, что и панель.
+    // Battery — the free right-hand zone of the panel (the icons+values layout
+    // leaves it empty). Refreshed by the same per-minute partial-push as the panel.
     BatteryReading bat = ctx.battery.read();
     const int bw = 72, bh = 30;
-    const int bx = px + kPanelW - bw - 12;  // симметрично левому: 12px от рамки (как иконка слева)
+    const int bx = px + kPanelW - bw - 12;  // mirror the left edge: 12px from the border (like the left icon)
     IconKit::battery(target, bx, py + 34, bw, bh, bat.percent);
-    fonts.apply(target, FontFace::Serif, 22);   // мельче (было 30)
+    fonts.apply(target, FontFace::Serif, 22);
     target.setTextColor(15);
     char bs[8]; snprintf(bs, sizeof(bs), "%u%%", bat.percent);
     target.drawString(bs, bx + 8, py + 78);
@@ -259,17 +259,17 @@ void Screensaver::renderFull(AppContext& ctx, bool rotate_photo) {
 // This is what lets renderFull (main canvas) and renderMinuteTick
 // (clock-only canvas) share the same text-placement logic.
 static void drawClockInto(M5EPD_Canvas& target, AppContext& ctx, int ox, int oy) {
-    // Боксим часы+дату в непрозрачный белый прямоугольник с рамкой (тот же стиль,
-    // что у погодной панели) — крупные цифры поверх фото читаются плохо. Бокс
-    // совпадает с регионом partial-пуша (kClockRect), поэтому полностью перекрывает
-    // прежнее содержимое: восстанавливать обои под часами из кэша больше не нужно.
+    // Box the clock+date in an opaque white rectangle with a border (same style as
+    // the weather panel) — large digits over a photo read poorly. The box matches
+    // the partial-push region (kClockRect), so it fully covers the previous content:
+    // no need to restore the wallpaper under the clock from cache.
     const int bxp = kClockRectX - ox, byp = kClockRectY - oy;
-    target.fillRect(bxp, byp, kClockRectW, kClockRectH, 0);   // 0 = белый (бумага)
-    target.drawRect(bxp, byp, kClockRectW, kClockRectH, 15);  // 15 = чёрная рамка
+    target.fillRect(bxp, byp, kClockRectW, kClockRectH, 0);   // 0 = white (paper)
+    target.drawRect(bxp, byp, kClockRectW, kClockRectH, 15);  // 15 = black border
 
-    // Контент центрируем относительно самого бокса (MC_DATUM — по метрикам шрифта,
-    // надёжнее textWidth для крупных глифов), а не по захардкоженным экранным
-    // смещениям — так часы и дата стоят с равными отступами внутри прямоугольника.
+    // Center content relative to the box itself (MC_DATUM — font-metric based, more
+    // reliable than textWidth for large glyphs), not via hardcoded screen offsets —
+    // so the clock and date sit with equal margins inside the rectangle.
     const int cx = bxp + kClockRectW / 2;
     char hhmm[8];
     ctx.rtc.formatHHMM(hhmm, sizeof(hhmm));
@@ -280,10 +280,10 @@ static void drawClockInto(M5EPD_Canvas& target, AppContext& ctx, int ox, int oy)
     target.setTextColor(15);
     target.setTextDatum(MC_DATUM);
     fonts.apply(target, FontFace::MonoBold, 96);
-    target.drawString(hhmm, cx, byp + kClockRectH * 2 / 5);   // часы — верхняя треть
+    target.drawString(hhmm, cx, byp + kClockRectH * 2 / 5);   // clock — upper third
     fonts.apply(target, FontFace::Serif, 28);
-    target.drawString(date, cx, byp + kClockRectH * 3 / 4);   // дата — ниже центра
-    target.setTextDatum(TL_DATUM);                            // вернуть дефолт
+    target.drawString(date, cx, byp + kClockRectH * 3 / 4);   // date — below center
+    target.setTextDatum(TL_DATUM);                            // restore default
 }
 
 void Screensaver::renderBackground(AppContext& ctx) {
@@ -311,8 +311,8 @@ void Screensaver::renderMinuteTick(AppContext& ctx) {
     }
 
     // Draw clock with local coords (offset by the rect's screen-space origin).
-    // drawClockInto заливает весь бокс непрозрачно (== весь clock_canvas), поэтому
-    // ни восстановления обоев из кэша, ни предварительного fill больше не нужно.
+    // drawClockInto fills the whole box opaquely (== the entire clock_canvas), so
+    // neither a wallpaper restore from cache nor a pre-fill is needed.
     drawClockInto(clock_canvas, ctx, kClockRectX, kClockRectY);
 
     // Push only the clock rectangle (scoped to ~380×200, not the full 540×960).

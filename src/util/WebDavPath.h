@@ -3,19 +3,19 @@
 
 namespace paperos {
 
-// Percent-декод ("%20"→" "). Усечённые/битые "%" остаются литералами.
+// Percent-decode ("%20"→" "). Truncated/malformed "%" stays literal.
 std::string urlDecode(const std::string& in);
 
-// Percent-энкод для href в XML. Сохраняет unreserved + '/' (разделитель пути).
+// Percent-encode for hrefs in XML. Preserves unreserved + '/' (path separator).
 std::string urlEncode(const std::string& in);
 
-// URL-путь запроса → абсолютный путь под корнем /paperos.
-// false, если после нормализации путь выходит за корень: любой сегмент "..",
-// либо null-байт в декодированной строке. При false outSdPath очищается.
+// Request URL path → absolute path under the /paperos root.
+// false if, after normalization, the path escapes the root: any ".." segment,
+// or a null byte in the decoded string. On false, outSdPath is cleared.
 // "/" -> "/paperos"; "/books/x.txt" -> "/paperos/books/x.txt".
-// NB: percent-декод выполняется ДО разбиения на сегменты, поэтому "%2F"
-// внутри сегмента трактуется как разделитель пути (а не литеральный слэш).
-// На FAT32 имя файла не может содержать '/', так что это безвредно.
+// NB: percent-decode runs BEFORE splitting into segments, so a "%2F" inside a
+// segment is treated as a path separator (not a literal slash). On FAT32 a
+// filename can't contain '/', so this is harmless.
 bool mapUrlToSdPath(const std::string& urlPath, std::string& outSdPath);
 
 } // namespace paperos

@@ -12,15 +12,15 @@ namespace paperos {
 
 // --- file-static helpers ---
 
-// Ответ только со статусом и пустым телом (для кодов, которых нет в httpd_err_code_t).
+// Status-only response with an empty body (for codes not in httpd_err_code_t).
 static esp_err_t sendSimple(httpd_req_t* r, const char* status) {
     httpd_resp_set_status(r, status);
     httpd_resp_send(r, nullptr, 0);
     return ESP_OK;
 }
 
-// Слить непрочитанное тело запроса (PROPFIND/LOCK шлют XML) — иначе keep-alive
-// соединение получит мусор в следующем запросе.
+// Drain the unread request body (PROPFIND/LOCK send XML) — otherwise the keep-alive
+// connection sees garbage on the next request.
 static void drainBody(httpd_req_t* r) {
     char tmp[256];
     int remaining = r->content_len;
@@ -47,7 +47,7 @@ esp_err_t WebDavServer::options(httpd_req_t* r) {
     httpd_resp_set_hdr(r, "Allow",
         "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, MKCOL, MOVE, LOCK, UNLOCK");
     httpd_resp_set_hdr(r, "MS-Author-Via", "DAV");
-    httpd_resp_send(r, nullptr, 0);   // httpd сам выставит Content-Length: 0 — свой не ставим
+    httpd_resp_send(r, nullptr, 0);   // httpd sets Content-Length: 0 itself — don't add our own
     return ESP_OK;
 }
 
@@ -61,7 +61,7 @@ esp_err_t WebDavServer::propfind(httpd_req_t* r) {
 
     char depth[16] = {0};
     httpd_req_get_hdr_value_str(r, "Depth", depth, sizeof(depth));
-    bool deep = (depth[0] != '0');   // дефолт (нет заголовка) → как "1"
+    bool deep = (depth[0] != '0');   // default (no header) → treated as "1"
 
     std::vector<DavEntry> children;
     if (isDir && deep) {
@@ -86,7 +86,7 @@ esp_err_t WebDavServer::get(httpd_req_t* r, bool headOnly) {
     bool isDir; uint32_t size, mtime;
     if (!sd_.stat(sdPath.c_str(), isDir, size, mtime)) return sendSimple(r, "404 Not Found");
 
-    if (isDir) {   // на папку листинг не отдаём
+    if (isDir) {   // don't serve a listing for a directory
         httpd_resp_set_type(r, "text/plain");
         const char* msg = "Collection";
         httpd_resp_send(r, headOnly ? nullptr : msg, headOnly ? 0 : strlen(msg));
@@ -94,9 +94,9 @@ esp_err_t WebDavServer::get(httpd_req_t* r, bool headOnly) {
     }
 
     if (headOnly) {
-        // httpd_resp_send(NULL,0) сам выставляет Content-Length: 0; свой размер не
-        // ставим, иначе вышло бы два конфликтующих Content-Length (нарушение RFC).
-        // Клиенты берут размер из PROPFIND; chunked-GET всё равно без Content-Length.
+        // httpd_resp_send(NULL,0) sets Content-Length: 0 itself; we don't set our own
+        // size, otherwise there would be two conflicting Content-Length headers (RFC
+        // violation). Clients take the size from PROPFIND; chunked GET has no Content-Length anyway.
         httpd_resp_set_type(r, "application/octet-stream");
         httpd_resp_send(r, nullptr, 0);
         return ESP_OK;
@@ -116,7 +116,7 @@ esp_err_t WebDavServer::get(httpd_req_t* r, bool headOnly) {
         }
     }
     f.close();
-    httpd_resp_send_chunk(r, nullptr, 0);   // финальный пустой chunk → конец
+    httpd_resp_send_chunk(r, nullptr, 0);   // final empty chunk → end
     return ESP_OK;
 }
 
@@ -130,11 +130,11 @@ esp_err_t WebDavServer::put(httpd_req_t* r) {
     File f = sd_.openWrite(sdPath.c_str());
     if (!f) return sendSimple(r, "500 Internal Server Error");
 
-    // Тело читаем по Content-Length. ВАЖНО: chunked-тело (Transfer-Encoding: chunked,
-    // content_len==0) esp_http_server не поддерживает — цикл не выполнится и файл
-    // останется пустым. Это и есть причина, по которой запись из macOS Finder
-    // (всегда chunked) не работает; клиенты с Content-Length (curl -T/Cyberduck/
-    // rclone/Windows) шлют длину и пишут корректно. Подробно — spec §12.
+    // Read the body by Content-Length. IMPORTANT: esp_http_server doesn't support a
+    // chunked body (Transfer-Encoding: chunked, content_len==0) — the loop won't run
+    // and the file stays empty. That's exactly why writing from macOS Finder (always
+    // chunked) doesn't work; clients with Content-Length (curl -T / Cyberduck /
+    // rclone / Windows) send the length and write correctly. See spec §12.
     const size_t BUF = 2048;
     std::vector<char> buf(BUF);
     int remaining = r->content_len;
@@ -183,7 +183,7 @@ esp_err_t WebDavServer::move(httpd_req_t* r) {
     httpd_req_get_hdr_value_str(r, "Destination", dbuf.data(), dlen + 1);
     std::string dest(dbuf.data());
 
-    // Destination может быть полным URL ("http://host/path") — берём путь.
+    // Destination may be a full URL ("http://host/path") — take just the path.
     auto scheme = dest.find("://");
     if (scheme != std::string::npos) {
         auto slash = dest.find('/', scheme + 3);
@@ -191,14 +191,14 @@ esp_err_t WebDavServer::move(httpd_req_t* r) {
     }
     std::string destPath;
     if (!mapUrlToSdPath(dest, destPath)) return sendSimple(r, "403 Forbidden");
-    // Self-move (src == dest): RFC 4918 §9.9.4 → 403. КРИТИЧНО: без этой проверки
-    // ветка overwrite ниже удалила бы сам файл, а rename затем упал бы → потеря данных.
+    // Self-move (src == dest): RFC 4918 §9.9.4 → 403. CRITICAL: without this check the
+    // overwrite branch below would delete the file itself and the rename would then fail → data loss.
     if (srcPath == destPath) return sendSimple(r, "403 Forbidden");
     if (!sd_.exists(srcPath.c_str())) return sendSimple(r, "404 Not Found");
 
     bool destExisted = sd_.exists(destPath.c_str());
-    // overwrite: rename не перезапишет существующий. removeTree снимает и файл, и
-    // непустую папку (removePath/rmdir на непустой папке провалился бы → 500).
+    // overwrite: rename won't overwrite an existing target. removeTree removes both a
+    // file and a non-empty directory (removePath/rmdir on a non-empty dir would fail → 500).
     if (destExisted) sd_.removeTree(destPath.c_str());
     if (!sd_.renamePath(srcPath.c_str(), destPath.c_str())) return sendSimple(r, "500 Internal Server Error");
     return sendSimple(r, destExisted ? "204 No Content" : "201 Created");
@@ -209,9 +209,9 @@ esp_err_t WebDavServer::lock(httpd_req_t* r) {
     char token[64];
     snprintf(token, sizeof(token), "opaquelocktoken:paperos-%u", (unsigned)(++lock_counter_));
     char hdr[80];
-    snprintf(hdr, sizeof(hdr), "<%s>", token);     // RFC: Lock-Token в угловых скобках
+    snprintf(hdr, sizeof(hdr), "<%s>", token);     // RFC: Lock-Token in angle brackets
     std::string xml = buildLockXml(token, 3600);
-    httpd_resp_set_hdr(r, "Lock-Token", hdr);      // hdr живёт до return (после send) — ок
+    httpd_resp_set_hdr(r, "Lock-Token", hdr);      // hdr lives until return (after send) — ok
     httpd_resp_set_type(r, "application/xml; charset=\"utf-8\"");
     httpd_resp_send(r, xml.c_str(), xml.size());
     return ESP_OK;
@@ -223,8 +223,8 @@ esp_err_t WebDavServer::unlock(httpd_req_t* r) {
 }
 
 esp_err_t WebDavServer::proppatch(httpd_req_t* r) {
-    // Свойства не храним — отвечаем «всё установлено» (207). Без этого macOS Finder
-    // (шлёт PROPPATCH сразу после PUT) валит копирование ошибкой -36.
+    // We don't store properties — reply "all set" (207). Without this, macOS Finder
+    // (which sends PROPPATCH right after PUT) fails the copy with error -36.
     drainBody(r);
     std::string sdPath, urlPath;
     if (!reqPath(r, sdPath, urlPath)) return sendSimple(r, "400 Bad Request");

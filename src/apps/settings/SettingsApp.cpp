@@ -131,7 +131,7 @@ void SettingsApp::renderSection(AppContext& ctx) {
     Fonts fonts; fonts.apply(c, FontFace::Serif, kHeaderFontPx);
     c.setTextColor(15);
     // Section title in the header. Going back is the hardware G38 button now —
-    // no on-screen "Назад" button.
+    // no on-screen "Back" button.
     const char* title;
     switch (section_) {
         case Section::Wifi:        title = "WiFi";           break;
@@ -382,7 +382,7 @@ void SettingsApp::onSectionTouch(int16_t x, int16_t y, AppContext& ctx) {
         };
         if (!ctx.sd.present()) toastSync(tr(Str::common_no_sd));
         else                   toastSync(ctx.config.syncWithFile() ? tr(Str::set_synced) : tr(Str::set_json_error));
-        rebuildRows(ctx); renderSection(ctx);   // значения могли измениться из файла
+        rebuildRows(ctx); renderSection(ctx);   // values may have changed from the file
     }
     else if (r.field_key == "reboot")           { ESP.restart(); }
 }

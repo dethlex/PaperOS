@@ -89,14 +89,14 @@ void IconKit::drop(M5EPD_Canvas& c, int x, int y, int s) {
 // ---- battery (migrated 1:1 from BatteryIcon::draw) ----
 void IconKit::battery(M5EPD_Canvas& c, int x, int y, int w, int h, uint8_t percent) {
     if (percent > 100) percent = 100;
-    if (w < 8 || h < 4) return;   // вырожденный размер — рисовать нечего
+    if (w < 8 || h < 4) return;   // degenerate size — nothing to draw
 
     const int nub_w  = 3;
     const int nub_h  = h / 3;
     const int body_w = w - nub_w;
 
-    c.drawRect(x, y, body_w, h, INK);                                  // корпус
-    c.fillRect(x + body_w, y + (h - nub_h) / 2, nub_w, nub_h, INK);    // носик
+    c.drawRect(x, y, body_w, h, INK);                                  // body
+    c.fillRect(x + body_w, y + (h - nub_h) / 2, nub_w, nub_h, INK);    // terminal nub
 
     const int inset = 2;
     const int avail = body_w - 2 * inset;
@@ -193,7 +193,7 @@ static void glyphDice(M5EPD_Canvas& c, int x, int y, int s) {
 
 // ---- per-game menu glyphs ----
 static void glyphTicTac(M5EPD_Canvas& c, int x, int y, int s) {
-    // X on the left, O on the right — reads instantly as крестики-нолики
+    // X on the left, O on the right — reads instantly as tic-tac-toe
     int ax0 = x + s / 12, ax1 = x + s * 5 / 12;
     int ay0 = y + s / 4,  ay1 = y + s * 3 / 4;
     c.drawLine(ax0, ay0, ax1, ay1, INK);
@@ -219,7 +219,7 @@ static void glyphMine(M5EPD_Canvas& c, int x, int y, int s) {
 
 static void glyphFifteen(M5EPD_Canvas& c, int x, int y, int s) {
     // 4x4 grid of 15 filled tiles with the bottom-right cell empty — the canonical
-    // sliding-puzzle look (16 cells, 15 tiles + 1 hole = «пятнашки»).
+    // sliding-puzzle look (16 cells, 15 tiles + 1 hole = the 15-puzzle).
     int m = s / 8, bw = s - 2 * m, bx = x + m, by = y + m, cell = bw / 4;
     c.drawRect(bx, by, bw, bw, INK);
     for (int i = 1; i < 4; ++i) {

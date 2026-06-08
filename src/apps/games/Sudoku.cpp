@@ -50,7 +50,7 @@ void Sudoku::onInput(const InputEvent& e) {
 void Sudoku::render(M5EPD_Canvas& c) {
     Fonts fonts;
     c.setTextColor(15);
-    // Header already shows the game title «Судоку» — only surface the win here.
+    // Header already shows the game title — only surface the win here.
     if (core_.isSolved()) {
         fonts.apply(c, FontFace::Serif, 28);
         c.drawString(tr(Str::sudoku_solved), 30, 86);

@@ -55,11 +55,11 @@ void test_number_valid_applied() {
     TEST_ASSERT_EQUAL_UINT16(15, base.weatherRefreshMin);
 }
 void test_idle_s_out_of_uint16_kept() {
-    // 86400 > uint16_t max (65535): не должно молча обрезаться — поле сохраняет base.
+    // 86400 > uint16_t max (65535): must not silently truncate -- the field keeps base.
     Config base; base.screensaverIdleS=300;
     TEST_ASSERT_TRUE(parseConfigMerge(R"({"screensaver":{"idle_s":86400}})", base));
     TEST_ASSERT_EQUAL_UINT16(300, base.screensaverIdleS);
-    // граничное валидное значение применяется.
+    // boundary valid value is applied.
     TEST_ASSERT_TRUE(parseConfigMerge(R"({"screensaver":{"idle_s":65535}})", base));
     TEST_ASSERT_EQUAL_UINT16(65535, base.screensaverIdleS);
 }

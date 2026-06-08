@@ -44,16 +44,16 @@ void test_dot_segment_ok() {
 void test_urldecode() {
     TEST_ASSERT_EQUAL_STRING("a b",  urlDecode("a%20b").c_str());
     TEST_ASSERT_EQUAL_STRING("a b",  urlDecode("a b").c_str());
-    TEST_ASSERT_EQUAL_STRING("%",    urlDecode("%").c_str());   // усечённое → литерал
-    TEST_ASSERT_EQUAL_STRING("%zz",  urlDecode("%zz").c_str()); // битый hex → литерал
+    TEST_ASSERT_EQUAL_STRING("%",    urlDecode("%").c_str());   // truncated → literal
+    TEST_ASSERT_EQUAL_STRING("%zz",  urlDecode("%zz").c_str()); // malformed hex → literal
 }
 void test_urlencode() {
     TEST_ASSERT_EQUAL_STRING("My%20Book.txt", urlEncode("My Book.txt").c_str());
     TEST_ASSERT_EQUAL_STRING("/books/a.txt",  urlEncode("/books/a.txt").c_str());
 }
 void test_urlencode_high_byte() {
-    // 0xD0 0xB0 = UTF-8 для 'а' (кириллица). Энкодер берёт unsigned char →
-    // %D0%B0, без знакового расширения в %FFFFFF...
+    // 0xD0 0xB0 = UTF-8 for Cyrillic 'а'. The encoder takes unsigned char →
+    // %D0%B0, without sign-extension into %FFFFFF...
     std::string in; in.push_back((char)0xD0); in.push_back((char)0xB0);
     TEST_ASSERT_EQUAL_STRING("%D0%B0", urlEncode(in).c_str());
 }

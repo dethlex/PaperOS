@@ -135,7 +135,7 @@ void WeatherApp::render(AppContext& ctx) {
         y += 72;
     }
 
-    // "Обновлено HH:MM" — full-width footer below the forecast (avoids the
+    // "Updated HH:MM" — full-width footer below the forecast (avoids the
     // header right-edge clip). Shown whenever we have a fetch timestamp, even
     // offline (then it's the last-known cache time). Local wall-clock via
     // formatHHMMUnix.
