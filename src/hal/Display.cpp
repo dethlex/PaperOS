@@ -16,13 +16,22 @@ void Display::begin(bool full_init) {
 }
 
 void Display::powerDown() {
-    M5.disableEXTPower();                    // cut LDO to IT8951
+    // Cut the ACTUAL e-paper rail: GPIO23 (M5EPD_EPD_PWR_EN_PIN) powers the IT8951
+    // controller + TPS65185 EPD PMIC — the dominant idle consumer. The previous
+    // code cut only GPIO5 (disableEXTPower = EXT/Grove boost), which does NOT power
+    // the IT8951, so the controller kept running in SYS_RUN through every light
+    // sleep (the lock-screen battery-drain bug). We drop both rails; the GPIO2
+    // main-power latch stays HIGH so the board survives on battery and the e-ink
+    // panel physically retains its frame without power.
+    M5.disableEPDPower();                    // GPIO23 — actually powers off the IT8951
+    M5.disableEXTPower();                    // GPIO5  — EXT/Grove boost (secondary)
     initialized_ = false;
 }
 
 void Display::wake() {
     if (initialized_) return;                // already up
-    M5.enableEXTPower();                      // GPIO5 HIGH — restore LDO to IT8951
+    M5.enableEPDPower();                      // GPIO23 HIGH — restore IT8951/EPD rail
+    M5.enableEXTPower();                      // GPIO5 HIGH — restore EXT/Grove boost
     delay(1000);                              // rail settle (matches M5.begin before EPD.begin)
     // Re-run the IT8951 driver init. Safe to re-call (no guard, SPI.begin twice
     // is OK); reloads SYS_RUN + VCOM. _tar_memaddr survives in RAM, so no

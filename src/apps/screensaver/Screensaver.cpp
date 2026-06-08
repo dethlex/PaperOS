@@ -315,9 +315,14 @@ void Screensaver::renderMinuteTick(AppContext& ctx) {
     // ни восстановления обоев из кэша, ни предварительного fill больше не нужно.
     drawClockInto(clock_canvas, ctx, kClockRectX, kClockRectY);
 
-    // Push only the clock rectangle. SPI traffic and e-ink waveform are
-    // both scoped to ~380×220 instead of the full 540×960.
-    ctx.display.pushSubCanvas(clock_canvas, kClockRectX, kClockRectY, PushMode::Partial);
+    // Push only the clock rectangle (scoped to ~380×200, not the full 540×960).
+    // FULL (GC16), not Partial (GL16): we now power-cut the IT8951 rail (GPIO23)
+    // every sleep, so on wake its framebuffer is blank and a GL16 partial — which
+    // transitions from the controller's last buffer — would ghost the previous
+    // digits. GC16 drives the box to its target regardless of prior state. Only
+    // this box waveform-refreshes; the wallpaper around it is retained by the
+    // panel (no waveform there). Cost: a clean refresh of the box each tick.
+    ctx.display.pushSubCanvas(clock_canvas, kClockRectX, kClockRectY, PushMode::Full);
 
     // Weather panel — re-read the cache + sensor and partial-push every minute
     // (outdoor + indoor live alongside the clock). Self-contained white box.
@@ -328,7 +333,7 @@ void Screensaver::renderMinuteTick(AppContext& ctx) {
         panel_canvas_ready = true;
     }
     drawWeatherPanel(panel_canvas, ctx, kPanelX, kPanelY);
-    ctx.display.pushSubCanvas(panel_canvas, kPanelX, kPanelY, PushMode::Partial);
+    ctx.display.pushSubCanvas(panel_canvas, kPanelX, kPanelY, PushMode::Full);  // GC16 — see clock note above
 }
 
 void Screensaver::enter(AppContext& ctx) {

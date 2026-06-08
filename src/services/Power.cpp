@@ -24,12 +24,30 @@ void Power::lightSleep(uint32_t seconds) {
     gpio_wakeup_enable(kBtnG38, GPIO_INTR_LOW_LEVEL);   // G38 press → wake
     esp_sleep_enable_gpio_wakeup();                     // GPIO wake (light sleep)
 
-    esp_light_sleep_start();                            // returns on wake
-
-    last_wake_ = (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO)
-                 ? WakeCause::Button : WakeCause::Timer;
+    uint32_t t0 = millis();
+    esp_err_t rc = esp_light_sleep_start();             // returns on wake
+    uint32_t slept_ms = millis() - t0;
     gpio_wakeup_disable(kBtnG38);                       // disarm until next sleep
-    LOG_INFO("power", "wake: %s", last_wake_ == WakeCause::Button ? "G38" : "timer");
+
+    if (rc != ESP_OK) {
+        // Sleep entry was REJECTED (e.g. a wake source already satisfied at the
+        // instant of entry). Defensive: without this the screensaver while-loop
+        // would busy-spin at full power re-initing the EPD ~continuously. Fall
+        // back to a real blocking wait for the requested interval and surface it.
+        last_wake_ = WakeCause::Timer;
+        LOG_WARN("power", "light sleep REJECTED rc=%d — fallback delay %us",
+                 static_cast<int>(rc), static_cast<unsigned>(seconds));
+        delay(static_cast<uint32_t>(seconds) * 1000UL);
+    } else {
+        last_wake_ = (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO)
+                     ? WakeCause::Button : WakeCause::Timer;
+    }
+    // The "slept" duration is the on-device drain diagnostic: a healthy lock
+    // screen logs one "wake: timer (slept ~60000ms)" per minute. Many lines per
+    // second ⇒ sleep is not engaging (look here first).
+    LOG_INFO("power", "wake: %s (slept %ums)",
+             last_wake_ == WakeCause::Button ? "G38" : "timer",
+             static_cast<unsigned>(slept_ms));
 
     display_.wake();                                    // restore IT8951 (~2s settle)
 }
