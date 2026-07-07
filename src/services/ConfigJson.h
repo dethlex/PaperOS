@@ -17,6 +17,12 @@ struct Config {
     uint16_t    screensaverIdleS  = 300;
     uint16_t    photoRotateMin    = 30;
     uint8_t     language          = 1;   // 0 = Ru, 1 = En (default En)
+    std::string printerUrl, printerApiKey, printerLightName;
+    std::string printerLightOn, printerLightOff;
+    std::string printerPowerDevice;
+    int         printerPreheatNozzle = 200;
+    int         printerPreheatBed    = 60;
+    std::string calendarEntity;          // "calendar.xxx" (HA), пусто = не выбран
 };
 
 // Full config -> JSON (nested schema).

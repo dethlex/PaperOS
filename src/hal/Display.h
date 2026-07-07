@@ -25,19 +25,20 @@ public:
     // is wiped to white and only the partial rect re-appears.
     void begin(bool full_init = true);
 
-    // Cut the IT8951 EXT-power LDO (GPIO5) to stop the controller drawing
-    // current during light sleep. Sets initialized_ = false. The 3V3 main
-    // rail (GPIO2 latch) is untouched, so the board stays alive on battery;
-    // the e-ink panel physically retains its last frame while powered off.
+    // Cut the IT8951 rail (GPIO23) powering the controller and TPS65185 PMIC —
+    // the dominant idle consumer during light sleep. Also cuts EXT/Grove boost
+    // (GPIO5). Sets initialized_ = false. The GPIO2 main-power latch is untouched,
+    // so the board stays alive on battery; the e-ink panel physically retains its
+    // last frame while powered off.
     void powerDown();
 
-    // Bring the IT8951 back up after powerDown() (EXT-power cycle fully reset
+    // Bring the IT8951 back up after powerDown() (GPIO23 power cycle fully resets
     // the controller: registers, image RAM, waveform, VCOM). Mirrors the EPD
-    // portion of M5.begin(): re-enable EXT power, settle, re-run the driver
+    // portion of M5.begin(): re-enable GPIO23/GPIO5, settle, re-run the driver
     // init (safe to re-call — unlike M5.begin() itself), restore rotation.
     // The PSRAM canvas survives in RAM (main rail), so createCanvas() is a
-    // no-op early-return. No-op if already initialized. ~2s due to library
-    // settle delays — call from the sleep/wake path, never from tick().
+    // no-op early-return. No-op if already initialized. Settle time is kEpdWakeSettleMs
+    // (HW-tunable) — call from the sleep/wake path, never from tick().
     void wake();
 
     // Get the main full-screen canvas. Lives in PSRAM.
@@ -79,6 +80,13 @@ public:
     bool lastWasFull() const { return last_full_; }
 
     static constexpr uint16_t kFullRefreshEvery = 20;
+
+    // Rail-settle wait between enableEPDPower() and re-running EPD.begin() in
+    // wake(). M5.begin() uses 1000 ms for a cold boot of the whole board; for
+    // the per-minute re-wake of an already-configured rail 250 ms proved
+    // sufficient on HW (2026-07-06 power refactor, smoke §11.5). If wake logs
+    // stop showing "IT8951 re-init ok" or boxes render garbage, raise this.
+    static constexpr uint32_t kEpdWakeSettleMs = 250;
 
 private:
     M5EPD_Canvas canvas_{&M5.EPD};

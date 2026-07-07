@@ -22,6 +22,16 @@ public:
     std::string haUrl();      void setHaUrl(const std::string&);
     std::string haToken();    void setHaToken(const std::string&);
 
+    // 3D printer (Moonraker)
+    std::string printerUrl();       void setPrinterUrl(const std::string&);
+    std::string printerApiKey();    void setPrinterApiKey(const std::string&);
+    std::string printerLightName(); void setPrinterLightName(const std::string&);
+    std::string printerLightOn();   void setPrinterLightOn(const std::string&);
+    std::string printerLightOff();  void setPrinterLightOff(const std::string&);
+    std::string printerPowerDevice();  void setPrinterPowerDevice(const std::string&);
+    uint16_t printerPreheatNozzle();   void setPrinterPreheatNozzle(uint16_t);
+    uint16_t printerPreheatBed();      void setPrinterPreheatBed(uint16_t);
+
     // Reader
     uint8_t fontSize();       void setFontSize(uint8_t v);     // 0=S,1=M,2=L
     uint8_t marginPx();       void setMarginPx(uint8_t v);
@@ -44,6 +54,11 @@ public:
     void   putWeatherCache(const void* data, size_t len);
     size_t getWeatherCache(void* out, size_t maxLen);
 
+    // Calendar (HA calendar entity)
+    std::string calendarEntity();    void setCalendarEntity(const std::string&);
+    void   putCalendarCache(const void* data, size_t len);   // NOT mirrored
+    size_t getCalendarCache(void* out, size_t maxLen);
+
     // Boot/runtime state — NOT mirrored to config.json.
     uint16_t photoIndex();    void setPhotoIndex(uint16_t v);
     uint8_t  lastAppIndex();  void setLastAppIndex(uint8_t v);
@@ -55,6 +70,10 @@ public:
     // HA per-entity state cache — NOT mirrored.
     void putEntityState(const char* entityId, const void* data, size_t len);
     size_t getEntityState(const char* entityId, void* out, size_t maxLen);
+
+    // Printer status cache — NOT mirrored.
+    void   putPrinterCache(const void* data, size_t len);
+    size_t getPrinterCache(void* out, size_t maxLen);
 
     // --- config.json mirror ---
     Config snapshot();                 // read all config fields from NVS

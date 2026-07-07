@@ -19,6 +19,8 @@ class Rtc;
 class Sht30;
 class Battery;
 class WebDavServer;
+class MoonrakerClient;
+class CalendarService;
 
 struct InputEvent {
     enum class Kind : uint8_t {
@@ -50,6 +52,8 @@ struct AppContext {
     Sht30& sht30;
     Battery& battery;
     WebDavServer& webdav;
+    MoonrakerClient& printer;
+    CalendarService& calendar;
 };
 
 class IApp {

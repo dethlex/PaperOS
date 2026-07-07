@@ -15,6 +15,10 @@ public:
     static void house(M5EPD_Canvas& c, int x, int y, int s);
     static void drop (M5EPD_Canvas& c, int x, int y, int s);
     static void battery(M5EPD_Canvas& c, int x, int y, int w, int h, uint8_t percent);
+    // Light toggle glyph: filled bulb when on, outline bulb when off.
+    static void lightbulb(M5EPD_Canvas& c, int x, int y, int s, bool on);
+    // Power-symbol toggle glyph: filled disc when on, outline ring when off/unknown.
+    static void power(M5EPD_Canvas& c, int x, int y, int s, bool on);
     // On-screen-keyboard key glyphs (replace the overflowing "BSP"/"SHF" text).
     static void backspace(M5EPD_Canvas& c, int x, int y, int s);  // ⌫ left arrow + X
     static void shift    (M5EPD_Canvas& c, int x, int y, int s);  // ⇧ up arrow

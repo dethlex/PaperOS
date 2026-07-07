@@ -15,11 +15,10 @@ public:
     // Re-renders the current wallpaper+clock without re-decoding the photo.
     static void renderMinuteTick(AppContext& ctx);
 
-    // Renders full screensaver (decodes new photo if needed, writes cache/bg.bin, full refresh).
+    // Renders full screensaver (decodes new photo if needed, caches the decoded frame in PSRAM, full refresh).
     static void renderFull(AppContext& ctx, bool rotate_photo);
 
 private:
-    static void renderBackground(AppContext& ctx);   // pushes bg.bin to canvas
     static void renderClockOverlay(AppContext& ctx); // draws HH:MM on top
 };
 

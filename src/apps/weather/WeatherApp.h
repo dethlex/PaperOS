@@ -20,7 +20,9 @@ private:
     WeatherData data_;
     bool offline_ = false;
     IndoorReading indoor_;
-    uint32_t last_refresh_ms_ = 0;   // cooldown for tap-triggered refresh
+    // Tap-cooldown anchor; intentionally NOT set by the gated enter() path — a
+    // manual tap right after entry may force a fetch, which is the documented contract.
+    uint32_t last_refresh_ms_ = 0;
 };
 
 } // namespace paperos

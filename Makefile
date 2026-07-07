@@ -7,7 +7,10 @@ NATIVE    := native
 PIO       := pio
 PORT      := $(firstword $(wildcard /dev/cu.usbserial-*))
 BAUD      := 115200
-PYTHON    := /opt/homebrew/Cellar/platformio/6.1.19_1/libexec/bin/python3
+# Derive the PlatformIO-bundled python (has pyserial) from the real `pio`
+# location, so a Homebrew version bump (…/6.1.19_1 → _2 → …) doesn't break the
+# serial helpers. Override with `make PYTHON=/path/to/python3` if needed.
+PYTHON    := $(shell d=$$(dirname "$$(readlink -f "$$(command -v pio)")"); echo "$$d/python3")
 ESPTOOL   := $(HOME)/.platformio/packages/tool-esptoolpy/esptool.py
 CAPTURE   := tools/serial_capture.py
 PREP      := tools/prepare_wallpapers.py

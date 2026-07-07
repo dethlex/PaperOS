@@ -19,6 +19,24 @@ void ConfigStore::setHaUrl(const std::string& v) { nvs_.putString("ha_url", v); 
 std::string ConfigStore::haToken()       { return nvs_.getString("ha_token"); }
 void ConfigStore::setHaToken(const std::string& v) { nvs_.putString("ha_token", v); if (persist_enabled_) persistToFile(); }
 
+std::string ConfigStore::printerUrl()       { return nvs_.getString("pr_url"); }
+void ConfigStore::setPrinterUrl(const std::string& v) { nvs_.putString("pr_url", v); if (persist_enabled_) persistToFile(); }
+std::string ConfigStore::printerApiKey()    { return nvs_.getString("pr_key"); }
+void ConfigStore::setPrinterApiKey(const std::string& v) { nvs_.putString("pr_key", v); if (persist_enabled_) persistToFile(); }
+std::string ConfigStore::printerLightName() { return nvs_.getString("pr_led"); }
+void ConfigStore::setPrinterLightName(const std::string& v) { nvs_.putString("pr_led", v); if (persist_enabled_) persistToFile(); }
+std::string ConfigStore::printerLightOn()   { return nvs_.getString("pr_on"); }
+void ConfigStore::setPrinterLightOn(const std::string& v) { nvs_.putString("pr_on", v); if (persist_enabled_) persistToFile(); }
+std::string ConfigStore::printerLightOff()  { return nvs_.getString("pr_off"); }
+void ConfigStore::setPrinterLightOff(const std::string& v) { nvs_.putString("pr_off", v); if (persist_enabled_) persistToFile(); }
+
+std::string ConfigStore::printerPowerDevice() { return nvs_.getString("pr_pwr"); }
+void ConfigStore::setPrinterPowerDevice(const std::string& v) { nvs_.putString("pr_pwr", v); if (persist_enabled_) persistToFile(); }
+uint16_t ConfigStore::printerPreheatNozzle() { return nvs_.getU16("pr_pn", 200); }
+void ConfigStore::setPrinterPreheatNozzle(uint16_t v) { nvs_.putU16("pr_pn", v); if (persist_enabled_) persistToFile(); }
+uint16_t ConfigStore::printerPreheatBed() { return nvs_.getU16("pr_pb", 60); }
+void ConfigStore::setPrinterPreheatBed(uint16_t v) { nvs_.putU16("pr_pb", v); if (persist_enabled_) persistToFile(); }
+
 uint8_t ConfigStore::fontSize()          { return nvs_.getU8("font_size", kDefaultFontSize); }
 void ConfigStore::setFontSize(uint8_t v) { nvs_.putU8("font_size", v); if (persist_enabled_) persistToFile(); }
 uint8_t ConfigStore::marginPx()          { return nvs_.getU8("margin_px", kDefaultMarginPx); }
@@ -46,6 +64,9 @@ void ConfigStore::setWeatherRefreshMin(uint16_t m) { nvs_.putU16("wx_refresh", m
 int8_t ConfigStore::indoorTempOffset()  { return static_cast<int8_t>(nvs_.getU8("in_toff", static_cast<uint8_t>(kDefaultIndoorTempOffset))); }
 void ConfigStore::setIndoorTempOffset(int8_t v) { nvs_.putU8("in_toff", static_cast<uint8_t>(v)); if (persist_enabled_) persistToFile(); }
 
+std::string ConfigStore::calendarEntity()  { return nvs_.getString("cal_entity"); }
+void ConfigStore::setCalendarEntity(const std::string& v) { nvs_.putString("cal_entity", v); if (persist_enabled_) persistToFile(); }
+
 // Runtime fields: NOT mirrored (high-frequency / internal).
 std::string ConfigStore::lastBookPath()  { return nvs_.getString("last_book"); }
 void ConfigStore::setLastBookPath(const std::string& v) { nvs_.putString("last_book", v); }
@@ -65,6 +86,12 @@ size_t ConfigStore::getEntityState(const char* eid, void* out, size_t maxLen) {
 void   ConfigStore::putWeatherCache(const void* d, size_t n) { nvs_.putBytes("wx_cache", d, n); }
 size_t ConfigStore::getWeatherCache(void* o, size_t n)       { return nvs_.getBytes("wx_cache", o, n); }
 
+void   ConfigStore::putPrinterCache(const void* d, size_t n) { nvs_.putBytes("pr_cache", d, n); }
+size_t ConfigStore::getPrinterCache(void* o, size_t n)       { return nvs_.getBytes("pr_cache", o, n); }
+
+void   ConfigStore::putCalendarCache(const void* d, size_t n) { nvs_.putBytes("cal_cache", d, n); }
+size_t ConfigStore::getCalendarCache(void* o, size_t n)       { return nvs_.getBytes("cal_cache", o, n); }
+
 uint16_t ConfigStore::photoIndex()          { return nvs_.getU16("photo_idx", 0); }
 void ConfigStore::setPhotoIndex(uint16_t v) { nvs_.putU16("photo_idx", v); }
 uint8_t ConfigStore::lastAppIndex()         { return nvs_.getU8("last_app", 0); }
@@ -83,6 +110,13 @@ Config ConfigStore::snapshot() {
     c.fontSize = fontSize(); c.marginPx = marginPx();
     c.screensaverIdleS = screensaverIdleS(); c.photoRotateMin = photoRotateMin();
     c.language = language();
+    c.printerUrl = printerUrl(); c.printerApiKey = printerApiKey();
+    c.printerLightName = printerLightName();
+    c.printerLightOn = printerLightOn(); c.printerLightOff = printerLightOff();
+    c.printerPowerDevice = printerPowerDevice();
+    c.printerPreheatNozzle = printerPreheatNozzle();
+    c.printerPreheatBed = printerPreheatBed();
+    c.calendarEntity = calendarEntity();
     return c;
 }
 
@@ -90,6 +124,12 @@ void ConfigStore::applyConfig(const Config& c) {
     persist_enabled_ = false;        // single file write done externally, not per-setter
     setWifiSsid(c.wifiSsid); setWifiPass(c.wifiPass);
     setHaUrl(c.haUrl); setHaToken(c.haToken);
+    setPrinterUrl(c.printerUrl); setPrinterApiKey(c.printerApiKey);
+    setPrinterLightName(c.printerLightName);
+    setPrinterLightOn(c.printerLightOn); setPrinterLightOff(c.printerLightOff);
+    setPrinterPowerDevice(c.printerPowerDevice);
+    setPrinterPreheatNozzle(static_cast<uint16_t>(c.printerPreheatNozzle));
+    setPrinterPreheatBed(static_cast<uint16_t>(c.printerPreheatBed));
     setTzOffsetHours(c.tzOffsetHours);
     setWeatherLat(c.weatherLat); setWeatherLon(c.weatherLon);
     setWeatherRefreshMin(c.weatherRefreshMin);
@@ -97,6 +137,7 @@ void ConfigStore::applyConfig(const Config& c) {
     setFontSize(c.fontSize); setMarginPx(c.marginPx);
     setScreensaverIdleS(c.screensaverIdleS); setPhotoRotateMin(c.photoRotateMin);
     setLanguage(c.language);
+    setCalendarEntity(c.calendarEntity);
     persist_enabled_ = true;
 }
 

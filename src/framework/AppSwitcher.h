@@ -27,6 +27,12 @@ public:
     uint8_t indexOf(const std::string& id) const;
     std::string idOfIndex(uint8_t index) const;
 
+    // Localized display title for an app id. Single source of truth is the
+    // app's own IApp::title(); a transient instance is built via the factory
+    // to read it, so app constructors MUST stay cheap and side-effect-free
+    // (all real work belongs in enter()). Returns the id itself if unknown.
+    std::string titleOf(const std::string& id) const;
+
     void setContext(AppContext* ctx) { ctx_ = ctx; }
 
 private:

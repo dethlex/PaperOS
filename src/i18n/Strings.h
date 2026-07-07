@@ -38,6 +38,22 @@ enum class Str : uint16_t {
     wmo_clear, wmo_partly, wmo_cloudy, wmo_fog, wmo_rain, wmo_snow, wmo_thunder,
     wmo_unknown,
     weather_updated_fmt,
+    printer_state_printing, printer_state_paused, printer_state_idle,
+    printer_state_complete, printer_state_cancelled, printer_state_error,
+    printer_hotend, printer_bed, printer_layer_fmt, printer_elapsed,
+    printer_eta, printer_light, printer_on, printer_off, printer_no_url,
+    printer_klippy_fmt, app_printer,
+    printer_power, printer_move, printer_home, printer_preheat, printer_cooldown,
+    printer_history, printer_history_empty, printer_power_locked, printer_not_ready,
+    printer_klipper_starting, printer_firmware_restart, printer_action_failed,
+    printer_cancel, printer_confirm_cancel, printer_confirm_start_fmt,
+    printer_confirm_poweroff, printer_confirm_restart, dlg_yes, dlg_no,
+    printer_slicer,
+    printer_pause, printer_resume, printer_confirm_pause, printer_heat_fmt,
+    printer_powered_off,
+    app_calendar, cal_today, cal_tomorrow, cal_all_day, cal_no_events,
+    cal_not_configured, cal_open_settings, cal_more_fmt, cal_untitled,
+    cal_ha_error, cal_pick_title, cal_test_ok_fmt,
     _Count
 };
 

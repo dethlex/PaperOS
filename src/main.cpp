@@ -21,6 +21,9 @@
 #include "services/WeatherService.h"
 #include "services/WeatherData.h"
 #include "services/WebDavServer.h"
+#include "services/MoonrakerClient.h"
+#include "services/CalendarService.h"
+#include "services/CalendarData.h"
 
 #include "framework/AppSwitcher.h"
 #include "framework/InputRouter.h"
@@ -36,6 +39,8 @@
 #include "apps/weather/WeatherApp.h"
 #include "apps/fileserver/FileServerApp.h"
 #include "apps/games/GamesApp.h"
+#include "apps/printer/PrinterApp.h"
+#include "apps/calendar/CalendarApp.h"
 
 #include "util/Logger.h"
 
@@ -55,12 +60,15 @@ static paperos::BookIndex  g_books(g_sd);
 static paperos::HAClient   g_ha(g_wifi, g_config);
 static paperos::WeatherService g_weather(g_wifi, g_config);
 static paperos::WebDavServer g_webdav(g_sd);
+static paperos::MoonrakerClient g_printer(g_wifi, g_config);
+static paperos::CalendarService g_calendar(g_wifi, g_config, g_rtc);
 static paperos::AppSwitcher g_switcher;
 static paperos::InputRouter g_router(g_touch, g_buttons, g_switcher);
 
 static paperos::AppContext g_ctx{
     g_display, g_config, g_storage, g_power_inst,
-    g_sd, g_wifi, g_rtc, g_books, g_ha, g_switcher, g_weather, g_sht30, g_battery, g_webdav
+    g_sd, g_wifi, g_rtc, g_books, g_ha, g_switcher, g_weather, g_sht30, g_battery, g_webdav, g_printer,
+    g_calendar
 };
 
 // One-shot boot refresh. The BM8563 RTC has no backup battery on M5Paper — it loses
@@ -88,6 +96,11 @@ static void bootSync(paperos::AppContext& ctx) {
         if (ctx.weather.fetch(wd)) {
             wd.fetched_unix = static_cast<uint32_t>(ctx.rtc.nowUnix());
             ctx.weather.saveCache(wd);
+        }
+        ctx.calendar.begin();
+        if (ctx.calendar.configured()) {
+            paperos::CalendarData cd;
+            if (ctx.calendar.fetch(cd)) ctx.calendar.saveCache(cd);
         }
     }
     ctx.wifi.disconnect();
@@ -141,9 +154,11 @@ void setup() {
     g_switcher.registerApp("ha",          [](){ return static_cast<paperos::IApp*>(new paperos::HomeAssistantApp()); });
     g_switcher.registerApp("settings",    [](){ return static_cast<paperos::IApp*>(new paperos::SettingsApp()); });
     g_switcher.registerApp("weather",     [](){ return static_cast<paperos::IApp*>(new paperos::WeatherApp()); });
+    g_switcher.registerApp("calendar",    [](){ return static_cast<paperos::IApp*>(new paperos::CalendarApp()); });
     g_switcher.registerApp("screensaver", [](){ return static_cast<paperos::IApp*>(new paperos::Screensaver()); });
     g_switcher.registerApp("fileserver",  [](){ return static_cast<paperos::IApp*>(new paperos::FileServerApp()); });
     g_switcher.registerApp("games",       [](){ return static_cast<paperos::IApp*>(new paperos::GamesApp()); });
+    g_switcher.registerApp("printer",     [](){ return static_cast<paperos::IApp*>(new paperos::PrinterApp()); });
     g_switcher.setContext(&g_ctx);
 
     {

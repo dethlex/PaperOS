@@ -27,4 +27,11 @@ std::string AppSwitcher::idOfIndex(uint8_t i) const {
     return i < order_.size() ? order_[i] : (order_.empty() ? std::string{} : order_[0]);
 }
 
+std::string AppSwitcher::titleOf(const std::string& id) const {
+    auto it = factories_.find(id);
+    if (it == factories_.end()) return id;       // unknown id: fall back to the id itself
+    std::unique_ptr<IApp> tmp(it->second());     // transient instance — ctors must stay cheap
+    return tmp->title();                          // tr() -> static lang table; copied into std::string
+}
+
 } // namespace paperos

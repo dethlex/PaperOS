@@ -1,4 +1,5 @@
 #include "Screensaver.h"
+#include <Arduino.h>  // setCpuFrequencyMhz
 #include "hal/Display.h"
 #include "hal/Sd.h"
 #include "hal/Rtc.h"
@@ -8,11 +9,17 @@
 #include "framework/ui/Fonts.h"
 #include "services/WeatherService.h"
 #include "services/WeatherData.h"
+#include "services/CalendarService.h"
+#include "services/calendar/CalendarSelect.h"
+#include "i18n/Strings.h"
 #include "framework/ui/IconKit.h"
 #include "util/WmoCode.h"
 #include "hal/Sht30.h"
 #include "hal/Battery.h"
 #include "util/Logger.h"
+#include "framework/ui/PngDraw.h"
+#include "util/Utf8.h"
+#include "apps/screensaver/RotationPolicy.h"
 #include <SD.h>
 #include <TJpg_Decoder.h>
 #include <PNGdec.h>
@@ -23,8 +30,18 @@ extern const uint8_t kDefaultBgEnd[]   asm("_binary_data_default_wallpaper_bin_e
 
 namespace paperos {
 
-static constexpr const char* kCachePath = "/paperos/cache/bg.bin";
 static constexpr size_t kBgBytes = kScreenW * kScreenH / 2;   // 4bpp = 259200 bytes
+
+// Decoded-wallpaper cache: one full 4bpp frame of the CURRENT photo in PSRAM.
+// Process-static → survives app re-instantiation and light sleep; cold boot
+// starts empty. Re-entering the lock screen with an unchanged photo becomes a
+// memcpy (tens of ms) instead of a JPEG/PNG re-decode (seconds of CPU).
+static uint8_t* s_bg_cache = nullptr;           // ps_malloc'd on first use
+static uint16_t s_bg_cache_index = 0xFFFF;      // photoIndex held by the cache
+
+// Unix time of the last photo rotation. Process-static: survives light sleep
+// and app re-instantiation; resets on cold boot (0 → rotate on first entry).
+static uint32_t s_last_rot_unix = 0;
 
 // Region redrawn on every minute tick — encloses HH:MM (96px MonoBold near
 // y≈720) and the date strip (28px Serif near y≈840) with margin. All four
@@ -91,7 +108,7 @@ static bool jpegOut(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitm
 
 // PNG SD-file callbacks (PNGdec needs them as function pointers).
 static File         s_png_file;
-static PNG          s_png;
+static PNG&         s_png = sharedPng();   // shared decoder instance (see PngDraw.h)
 static void* pngOpenCb(const char* filename, int32_t* size) {
     s_png_file = SD.open(filename, FILE_READ);
     if (!s_png_file) return nullptr;
@@ -130,10 +147,19 @@ static bool decodePngToCanvas(const std::string& path, M5EPD_Canvas& canvas) {
     int rc = s_png.open(path.c_str(), pngOpenCb, pngCloseCb, pngReadCb, pngSeekCb, pngDrawCb);
     bool ok = false;
     if (rc == PNG_SUCCESS) {
-        rc = s_png.decode(nullptr, 0);
-        s_png.close();
-        ok = (rc == PNG_SUCCESS);
-        if (!ok) LOG_WARN("ss", "PNG decode rc=%d", rc);
+        // pngDrawCb's stack line buffer is kScreenW wide, but getLineAsRGB565
+        // writes iWidth pixels unclamped (and PNG_MAX_BUFFERED_PIXELS admits far
+        // wider images) — reject oversize wallpapers BEFORE decode runs, same
+        // pattern as framework/ui/PngDraw.
+        if (s_png.getWidth() > kScreenW) {
+            LOG_WARN("ss", "PNG too wide (%d > %d), skipping", s_png.getWidth(), kScreenW);
+            s_png.close();
+        } else {
+            rc = s_png.decode(nullptr, 0);
+            s_png.close();
+            ok = (rc == PNG_SUCCESS);
+            if (!ok) LOG_WARN("ss", "PNG decode rc=%d", rc);
+        }
     } else {
         LOG_WARN("ss", "PNG open rc=%d", rc);
     }
@@ -159,13 +185,38 @@ static void drawWeatherRow(M5EPD_Canvas& t, Fonts& fonts, int rx, int ry,
     }
 }
 
+// Everything drawWeatherPanel renders, in comparable form. If two consecutive
+// minutes produce equal snapshots, the panel's GC16 push is skipped — the
+// TPS65185 waveform is the dominant per-minute energy cost and outdoor/indoor
+// readings change far less often than once a minute.
+struct PanelSnapshot {
+    bool    ok_out = false;
+    int16_t t_out  = 0;
+    uint8_t h_out  = 0;
+    uint8_t cat    = 0;     // WeatherCat of the outdoor icon
+    bool    ok_in  = false;
+    int16_t t_in   = 0;
+    uint8_t h_in   = 0;
+    uint8_t bat    = 0;     // battery percent (drawn in the panel)
+    // Fields behind an ok_* flag are only meaningful when the flag is set;
+    // keep any future fields zero-defaulted and gated the same way, or operator== breaks skip-push.
+    bool operator==(const PanelSnapshot& o) const {
+        return ok_out == o.ok_out && t_out == o.t_out && h_out == o.h_out &&
+               cat == o.cat && ok_in == o.ok_in && t_in == o.t_in &&
+               h_in == o.h_in && bat == o.bat;
+    }
+};
+
+static PanelSnapshot s_panel_prev;
+static bool          s_panel_prev_valid = false;
+
 // Combined weather panel: ONE box, icons + values only (no condition text).
 // Outdoor row (weather icon + temp + humidity) above the indoor row (house icon
 // + temp + humidity), symmetric columns. Outdoor comes from the NVS cache; indoor
 // is read live from the SHT30. (ox, oy) is the screen-space origin of `target`
 // (0,0 for the main canvas; the rect origin for the per-minute sub-canvas). The
 // white fill is opaque, so no wallpaper restore is needed under it.
-static void drawWeatherPanel(M5EPD_Canvas& target, AppContext& ctx, int ox, int oy) {
+static PanelSnapshot drawWeatherPanel(M5EPD_Canvas& target, AppContext& ctx, int ox, int oy) {
     WeatherData wd;
     bool wok = ctx.weather.loadCache(wd) && wd.valid;
     IndoorReading in = ctx.sht30.read(ctx.config.indoorTempOffset());
@@ -192,6 +243,16 @@ static void drawWeatherPanel(M5EPD_Canvas& target, AppContext& ctx, int ox, int 
     target.setTextColor(15);
     char bs[8]; snprintf(bs, sizeof(bs), "%u%%", bat.percent);
     target.drawString(bs, bx + 8, py + 78);
+
+    PanelSnapshot snap;
+    snap.ok_out = wok;
+    if (wok) { snap.t_out = static_cast<int16_t>(wd.current_c);
+               snap.h_out = wd.current_humidity;
+               snap.cat   = static_cast<uint8_t>(catFromWmo(wd.current_wmo)); }
+    snap.ok_in = in.valid;
+    if (in.valid) { snap.t_in = in.temp_c; snap.h_in = in.humidity; }
+    snap.bat = bat.percent;
+    return snap;
 }
 
 void Screensaver::renderFull(AppContext& ctx, bool rotate_photo) {
@@ -201,53 +262,57 @@ void Screensaver::renderFull(AppContext& ctx, bool rotate_photo) {
     if (rotate_photo) { photo++; ctx.config.setPhotoIndex(photo); }
 
     auto& canvas = ctx.display.canvas();
-    canvas.fillCanvas(0);
 
-    std::string path = pickWallpaper(ctx.sd, photo);
-    bool need_default = path.empty();
-    if (!need_default) {
-        if (endsWithIgnoreCase(path, ".png")) {
-            if (!decodePngToCanvas(path, canvas)) need_default = true;
-        } else {
-            s_decode_canvas = &canvas;
-            TJpgDec.setJpgScale(1);
-            TJpgDec.setCallback(jpegOut);
-            JRESULT jr = TJpgDec.drawSdJpg(0, 0, path.c_str());
-            if (jr != JDR_OK) {
-                LOG_WARN("ss", "TJpgDec rc=%d on %s", static_cast<int>(jr), path.c_str());
-                need_default = true;
-            }
-            s_decode_canvas = nullptr;
-        }
-    }
-    if (need_default) {
-        // Default fallback wallpaper from INCBIN: raw 4bpp 540x960.
-        const uint8_t* p = kDefaultBgStart;
-        for (int16_t row = 0; row < kScreenH; ++row) {
-            for (int16_t x = 0; x < kScreenW; x += 2) {
-                uint8_t byte = p[(row * kScreenW + x) / 2];
-                canvas.drawPixel(x,     row, (byte >> 4) & 0x0F);
-                canvas.drawPixel(x + 1, row, byte & 0x0F);
+    if (s_bg_cache && s_bg_cache_index == photo) {
+        // Cache hit: restore the decoded wallpaper without touching the SD.
+        memcpy(canvas.frameBuffer(), s_bg_cache, kBgBytes);
+    } else {
+        canvas.fillCanvas(0);
+
+        std::string path = pickWallpaper(ctx.sd, photo);
+        bool need_default = path.empty();
+        if (!need_default) {
+            if (endsWithIgnoreCase(path, ".png")) {
+                if (!decodePngToCanvas(path, canvas)) need_default = true;
+            } else {
+                s_decode_canvas = &canvas;
+                TJpgDec.setJpgScale(1);
+                TJpgDec.setCallback(jpegOut);
+                JRESULT jr = TJpgDec.drawSdJpg(0, 0, path.c_str());
+                if (jr != JDR_OK) {
+                    LOG_WARN("ss", "TJpgDec rc=%d on %s", static_cast<int>(jr), path.c_str());
+                    need_default = true;
+                }
+                s_decode_canvas = nullptr;
             }
         }
+        if (need_default) {
+            // Default fallback wallpaper from INCBIN: raw 4bpp 540x960.
+            const uint8_t* p = kDefaultBgStart;
+            for (int16_t row = 0; row < kScreenH; ++row) {
+                for (int16_t x = 0; x < kScreenW; x += 2) {
+                    uint8_t byte = p[(row * kScreenW + x) / 2];
+                    canvas.drawPixel(x,     row, (byte >> 4) & 0x0F);
+                    canvas.drawPixel(x + 1, row, byte & 0x0F);
+                }
+            }
+        }
+
+        if (!s_bg_cache) s_bg_cache = static_cast<uint8_t*>(ps_malloc(kBgBytes));
+        if (s_bg_cache) {
+            // Snapshot the PURE wallpaper (before panel/clock are drawn on top).
+            memcpy(s_bg_cache, canvas.frameBuffer(), kBgBytes);
+            s_bg_cache_index = photo;
+        }
+        // ps_malloc failure → cache stays disabled, we just decode each time.
     }
 
     // Bake the combined weather panel (outdoor cache + live indoor) into the
     // post-refresh frame so it's present immediately after a full refresh;
-    // renderMinuteTick re-pushes it live every minute. These baked rows in
-    // bg.bin are never read back (loadClockBgFromCache only restores the clock
-    // rows) — that's fine, the per-minute partial always overwrites them.
-    drawWeatherPanel(ctx.display.canvas(), ctx, 0, 0);
-
-    // Cache rendered bg as raw 4bpp on SD for fast minute-tick.
-    // M5EPD_Canvas internal buffer is 4bpp packed. We write it directly.
-    if (ctx.sd.present()) {
-        File f = SD.open(kCachePath, FILE_WRITE);
-        if (f) {
-            f.write(reinterpret_cast<const uint8_t*>(canvas.frameBuffer()), kBgBytes);
-            f.close();
-        }
-    }
+    // renderMinuteTick re-pushes it live every minute. Record the snapshot so
+    // the next minute tick doesn't force a redundant push of unchanged data.
+    s_panel_prev = drawWeatherPanel(ctx.display.canvas(), ctx, 0, 0);
+    s_panel_prev_valid = true;
 
     renderClockOverlay(ctx);
     ctx.display.pushFullClear();
@@ -280,20 +345,53 @@ static void drawClockInto(M5EPD_Canvas& target, AppContext& ctx, int ox, int oy)
     target.setTextColor(15);
     target.setTextDatum(MC_DATUM);
     fonts.apply(target, FontFace::MonoBold, 96);
-    target.drawString(hhmm, cx, byp + kClockRectH * 2 / 5);   // clock — upper third
+    target.drawString(hhmm, cx, byp + 72);    // часы — верхняя треть бокса
     fonts.apply(target, FontFace::Serif, 28);
-    target.drawString(date, cx, byp + kClockRectH * 3 / 4);   // date — below center
-    target.setTextDatum(TL_DATUM);                            // restore default
-}
+    target.drawString(date, cx, byp + 140);   // дата — ниже центра
 
-void Screensaver::renderBackground(AppContext& ctx) {
-    auto& canvas = ctx.display.canvas();
-    canvas.fillCanvas(0);
-    if (!ctx.sd.present()) return;
-    File f = SD.open(kCachePath, FILE_READ);
-    if (!f) return;
-    f.read(reinterpret_cast<uint8_t*>(canvas.frameBuffer()), kBgBytes);
-    f.close();
+    // Ближайшее событие календаря (из NVS-кэша, сети тут нет — незыблемое
+    // правило minute tick). Пусто/невалидно → строка не рисуется, бокс
+    // остаётся белым (визуально ничего не меняется).
+    {
+        // NB: `static`, not a stack local. sizeof(CalendarData) is ~2.9 KB, and
+        // the compiler reserves it for drawClockInto's whole frame from entry.
+        // drawClockInto then drives the FreeType glyph-render chain (fonts.apply
+        // → createRender → FT_Load_Glyph → …), which is ~20 frames deep and very
+        // stack-hungry. cd on the frame overflowed the 16 KB loopTask stack →
+        // Double exception. Screensaver rendering is single-threaded and
+        // non-reentrant (like clock_canvas/panel_canvas below), so a static is
+        // safe and keeps this big buffer off the stack.
+        static CalendarData cd;
+        if (ctx.calendar.loadCache(cd) && cd.valid) {
+            NextEventPick pick = pickScreensaverEvent(
+                cd, static_cast<uint32_t>(ctx.rtc.nowUnix()));
+            if (pick.ev) {
+                char t1[8], t2[8], line[96];
+                if (pick.ongoing) {
+                    ctx.rtc.formatHHMMUnix(pick.ev->start_local, t1, sizeof(t1));
+                    ctx.rtc.formatHHMMUnix(pick.ev->end_local, t2, sizeof(t2));
+                    snprintf(line, sizeof(line), "%s\xE2\x80\x93%s %s", t1, t2, pick.ev->title);
+                } else if (pick.tomorrow && pick.ev->all_day) {
+                    snprintf(line, sizeof(line), "%s \xE2\x97\x8F %s",
+                             tr(Str::cal_tomorrow), pick.ev->title);
+                } else if (pick.tomorrow) {
+                    ctx.rtc.formatHHMMUnix(pick.ev->start_local, t1, sizeof(t1));
+                    snprintf(line, sizeof(line), "%s %s %s",
+                             tr(Str::cal_tomorrow), t1, pick.ev->title);
+                } else {
+                    ctx.rtc.formatHHMMUnix(pick.ev->start_local, t1, sizeof(t1));
+                    snprintf(line, sizeof(line), "%s %s", t1, pick.ev->title);
+                }
+                // ~26 codepoints fit in 380px at Serif 22 (codepoint budget,
+                // not textWidth — see CLAUDE.md TTF notes).
+                char clip[96];
+                utf8Clip(clip, sizeof(clip), line, 26);
+                fonts.apply(target, FontFace::Serif, 22);
+                target.drawString(clip, cx, byp + 176);
+            }
+        }
+    }
+    target.setTextDatum(TL_DATUM);                            // restore default
 }
 
 void Screensaver::renderClockOverlay(AppContext& ctx) {
@@ -332,34 +430,48 @@ void Screensaver::renderMinuteTick(AppContext& ctx) {
         panel_canvas.createCanvas(kPanelW, kPanelH);
         panel_canvas_ready = true;
     }
-    drawWeatherPanel(panel_canvas, ctx, kPanelX, kPanelY);
-    ctx.display.pushSubCanvas(panel_canvas, kPanelX, kPanelY, PushMode::Full);  // GC16 — see clock note above
+    PanelSnapshot snap = drawWeatherPanel(panel_canvas, ctx, kPanelX, kPanelY);
+    if (!s_panel_prev_valid || !(snap == s_panel_prev)) {
+        ctx.display.pushSubCanvas(panel_canvas, kPanelX, kPanelY, PushMode::Full);  // GC16 — see clock note above
+        s_panel_prev = snap;
+        s_panel_prev_valid = true;
+    }
 }
 
 void Screensaver::enter(AppContext& ctx) {
-    // The real app index was already saved to NVS by the idle path in main.cpp,
-    // so we don't overwrite last_app with "screensaver" here.
-    renderFull(ctx, /*rotate_photo=*/true);
+    // Photo rotation is driven strictly by photoRotateMin (Settings) — entering
+    // the lock screen does NOT itself advance the photo (design 2026-07-06 §2).
+    uint32_t now = static_cast<uint32_t>(ctx.rtc.nowUnix());
+    bool rotate = rotationDue(now, s_last_rot_unix, ctx.config.photoRotateMin());
+    if (rotate) s_last_rot_unix = now;
+    renderFull(ctx, rotate);
 
-    // Low-power clock loop. Light sleep keeps the board powered (so it survives
-    // on battery and a G38 press can wake it), waking every minute to tick the
-    // clock. A G38 press exits the lock screen back into the UI.
+    // The lock-screen loop runs at 80 MHz: SPI/I2C clocks derive from the
+    // 80 MHz APB and are unaffected; with warm glyph caches the per-minute
+    // render fits the window easily. 240 MHz is restored for WiFi windows
+    // (TLS handshakes crawl at 80) and before returning to the interactive UI.
+    setCpuFrequencyMhz(80);
+
     while (true) {
         ctx.power.lightSleep(60);
 
         if (ctx.power.lastWake() == WakeCause::Button) {
+            setCpuFrequencyMhz(240);
             std::string id = ctx.switcher.idOfIndex(ctx.config.lastAppIndex());
             if (id.empty() || id == "screensaver") id = "launcher";
             ctx.switcher.requestSwitch(id);   // applied by main loop after enter() returns
             return;
         }
 
-        // Timer tick: refresh the clock, and the weather on its configured
-        // boundary (real RTC minute, since RTC slow memory no longer persists).
+        // Timer tick. Weather/calendar refresh on the configured minute
+        // boundary — data lands on screen via the panel's minute push below;
+        // a full re-render (wallpaper decode + GC16) happens ONLY when the
+        // photo itself rotates.
         int m = ctx.rtc.minute();
         uint16_t refresh = ctx.config.weatherRefreshMin();
         if (refresh == 0) refresh = 30;
         if ((m % refresh) == 0) {
+            setCpuFrequencyMhz(240);
             ctx.weather.begin();
             if (ctx.weather.ensureWifi()) {
                 WeatherData wd;
@@ -367,9 +479,27 @@ void Screensaver::enter(AppContext& ctx) {
                     wd.fetched_unix = static_cast<uint32_t>(ctx.rtc.nowUnix());
                     ctx.weather.saveCache(wd);
                 }
+                // Calendar rides the same WiFi session (no schedule of its own,
+                // calendar spec §4). Errors degrade silently to the cache.
+                ctx.calendar.begin();
+                if (ctx.calendar.configured()) {
+                    // static: ~2.9 KB reserved on enter()'s frame, under which
+                    // renderMinuteTick/renderFull below drive the deep FreeType
+                    // chain — a stack local risks the same loopTask overflow.
+                    static CalendarData cd;
+                    if (ctx.calendar.fetch(cd)) ctx.calendar.saveCache(cd);
+                }
             }
             ctx.weather.releaseWifi();
-            renderFull(ctx, /*rotate_photo=*/m == 0);
+            setCpuFrequencyMhz(80);
+        }
+
+        // Re-read time after the (possibly multi-second) WiFi boundary so rotation
+        // is judged on current time; do not merge with the earlier minute() read.
+        uint32_t tick_now = static_cast<uint32_t>(ctx.rtc.nowUnix());
+        if (rotationDue(tick_now, s_last_rot_unix, ctx.config.photoRotateMin())) {
+            s_last_rot_unix = tick_now;
+            renderFull(ctx, /*rotate_photo=*/true);
         } else {
             renderMinuteTick(ctx);
         }

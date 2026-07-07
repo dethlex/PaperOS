@@ -1,4 +1,5 @@
 #include "Utf8.h"
+#include <string.h>
 
 namespace paperos {
 
@@ -41,6 +42,43 @@ uint32_t cp1251ToCodepoint(uint8_t b) {
     };
     if (b < 0x80) return b;
     return table[b - 0x80];
+}
+
+size_t utf8CountCp(const char* s, size_t len) {
+    size_t n = 0;
+    for (size_t i = 0; i < len; ++i) {
+        if ((static_cast<unsigned char>(s[i]) & 0xC0) != 0x80) ++n;
+    }
+    return n;
+}
+
+size_t utf8AdvanceCp(const char* s, size_t len, size_t pos, size_t n_cp) {
+    size_t seen = 0;
+    while (pos < len && seen < n_cp) {
+        ++pos;
+        while (pos < len && (static_cast<unsigned char>(s[pos]) & 0xC0) == 0x80) ++pos;
+        ++seen;
+    }
+    return pos;
+}
+
+size_t utf8Clip(char* dst, size_t cap, const char* src, int max_cp) {
+    if (cap < 4) { if (cap) dst[0] = 0; return 0; }
+    size_t o = 0, i = 0, n = strlen(src);
+    int cp = 0;
+    while (i < n && cp < max_cp) {
+        size_t l = 1;
+        uint8_t b = static_cast<uint8_t>(src[i]);
+        if      ((b & 0xE0) == 0xC0) l = 2;
+        else if ((b & 0xF0) == 0xE0) l = 3;
+        else if ((b & 0xF8) == 0xF0) l = 4;
+        if (i + l > n || o + l >= cap - 4) break;   // reserve "…" (3 B) + NUL
+        memcpy(dst + o, src + i, l);
+        o += l; i += l; cp++;
+    }
+    if (i < n) { memcpy(dst + o, "\xE2\x80\xA6", 3); o += 3; }
+    dst[o] = 0;
+    return o;
 }
 
 } // namespace paperos

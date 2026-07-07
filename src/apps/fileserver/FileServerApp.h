@@ -12,7 +12,9 @@ public:
     bool onBack(AppContext&) override;
     bool keepAwake() const override { return true; }
     const char* id() const override { return "fileserver"; }
-    const char* title() const override { return tr(Str::app_fileserver); }
+    // Short name for the launcher tile ("Files"); the in-app header draws the
+    // full "File Server" (app_fileserver) directly in render().
+    const char* title() const override { return tr(Str::app_files); }
 
 private:
     void teardown(AppContext&);                       // stop server + WiFi off (idempotent)

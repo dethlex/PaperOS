@@ -9,6 +9,7 @@
 #include "services/HAClient.h"
 #include "services/WeatherService.h"
 #include "services/WeatherData.h"
+#include "services/CalendarService.h"
 #include "framework/ui/Fonts.h"
 #include "util/Logger.h"
 #include <ArduinoJson.h>
@@ -38,9 +39,10 @@ void SettingsApp::renderIndex(AppContext& ctx) {
     fonts.apply(c, FontFace::Serif, 26);
     const char* labels[] = {"WiFi", "Home Assistant", tr(Str::set_reading),
                              tr(Str::set_time), tr(Str::app_screensaver),
-                             tr(Str::app_weather), tr(Str::set_language), tr(Str::set_about)};
-    for (int i = 0; i < 8; ++i) {
-        int16_t y = 100 + i * 100;
+                             tr(Str::app_weather), tr(Str::app_calendar),
+                             tr(Str::set_language), tr(Str::set_about)};
+    for (int i = 0; i < 9; ++i) {
+        int16_t y = 100 + i * 90;
         c.drawRect(20, y, kScreenW - 40, 80, 12);
         c.drawString(labels[i], 40, y + 24);
     }
@@ -50,11 +52,12 @@ void SettingsApp::renderIndex(AppContext& ctx) {
 void SettingsApp::onIndexTouch(int16_t x, int16_t y, AppContext& ctx) {
     (void)x;
     if (y < 100) return;
-    int idx = (y - 100) / 100;
-    if (idx < 0 || idx > 7) return;
+    int idx = (y - 100) / 90;
+    if (idx < 0 || idx > 8) return;
     static const Section sections[] = {
         Section::Wifi, Section::Ha, Section::Reader,
-        Section::Time, Section::Screensaver, Section::Weather, Section::Language, Section::About
+        Section::Time, Section::Screensaver, Section::Weather,
+        Section::Calendar, Section::Language, Section::About
     };
     section_ = sections[idx];
     rebuildRows(ctx);
@@ -109,6 +112,14 @@ void SettingsApp::rebuildRows(AppContext& ctx) {
             rows_.push_back({tr(Str::set_update_now), "", "wx_update", false});
             break;
         }
+        case Section::Calendar: {
+            std::string ent = ctx.config.calendarEntity();
+            rows_.push_back({tr(Str::app_calendar),
+                             ent.empty() ? tr(Str::cal_not_configured) : ent,
+                             "cal_pick", false});
+            rows_.push_back({tr(Str::set_check), "", "cal_test", false});
+            break;
+        }
         case Section::Language: {
             // Active language is shown by a radio dot drawn in renderSection — a
             // font checkmark glyph (✓) isn't in DejaVuSerif and renders as tofu.
@@ -140,6 +151,7 @@ void SettingsApp::renderSection(AppContext& ctx) {
         case Section::Time:        title = tr(Str::set_time);        break;
         case Section::Screensaver: title = tr(Str::app_screensaver); break;
         case Section::Weather:     title = tr(Str::app_weather);     break;
+        case Section::Calendar:    title = tr(Str::app_calendar);    break;
         case Section::Language:    title = tr(Str::set_language);    break;
         case Section::About:       title = tr(Str::set_about);       break;
         default:                   title = tr(Str::app_settings);    break;
@@ -279,7 +291,80 @@ void SettingsApp::weatherUpdate(AppContext& ctx) {
 }
 
 
+void SettingsApp::renderCalendarPicker(AppContext& ctx) {
+    auto& c = ctx.display.canvas();
+    c.fillCanvas(0);
+    Fonts fonts; fonts.apply(c, FontFace::Serif, kHeaderFontPx);
+    c.setTextColor(15);
+    c.drawString(tr(Str::cal_pick_title), kHeaderTextX, kHeaderTextY);
+    fonts.apply(c, FontFace::Serif, 24);
+    int16_t y = 80;
+    for (const auto& ci : pick_list_) {
+        c.drawRect(20, y, kScreenW - 40, 70, 12);
+        c.drawString(ci.name.c_str(), 36, y + 8);
+        fonts.apply(c, FontFace::Serif, 18);
+        c.drawString(ci.entity_id.c_str(), 36, y + 40);
+        fonts.apply(c, FontFace::Serif, 24);
+        y += 80;
+        if (y > kScreenH - 80) break;   // больше не влезает
+    }
+    ctx.display.pushRegion({0,0,kScreenW,kScreenH}, PushMode::Full);
+}
+
+void SettingsApp::calendarPick(AppContext& ctx) {
+    auto& c = ctx.display.canvas();
+    Fonts fonts; fonts.apply(c, FontFace::Serif, 22);
+    auto toast = [&](const char* m) {
+        c.fillRect(20, kScreenH - 60, kScreenW - 40, 40, 0);
+        c.drawString(m, 30, kScreenH - 55);
+        ctx.display.pushRegion({20, kScreenH - 60, kScreenW - 40, 40}, PushMode::Quick);
+    };
+    toast(tr(Str::set_checking_ha));
+    ctx.calendar.begin();
+    if (!ctx.calendar.ensureWifi()) { toast(tr(Str::set_wifi_fail)); return; }
+    bool ok = ctx.calendar.fetchCalendarList(pick_list_);
+    ctx.calendar.releaseWifi();
+    if (!ok || pick_list_.empty()) { toast(tr(Str::cal_ha_error)); return; }
+    picking_calendar_ = true;
+    renderCalendarPicker(ctx);
+}
+
+void SettingsApp::calendarTest(AppContext& ctx) {
+    auto& c = ctx.display.canvas();
+    Fonts fonts; fonts.apply(c, FontFace::Serif, 22);
+    auto toast = [&](const char* m) {
+        c.fillRect(20, kScreenH - 60, kScreenW - 40, 40, 0);
+        c.drawString(m, 30, kScreenH - 55);
+        ctx.display.pushRegion({20, kScreenH - 60, kScreenW - 40, 40}, PushMode::Quick);
+    };
+    toast(tr(Str::set_checking_ha));
+    ctx.calendar.begin();
+    if (!ctx.calendar.configured()) { toast(tr(Str::cal_not_configured)); return; }
+    if (!ctx.calendar.ensureWifi()) { toast(tr(Str::set_wifi_fail)); return; }
+    // static, not stack: ~2.9 KB CalendarData on this frame + toast()'s FreeType
+    // render below is the same loopTask-overflow shape as the screensaver crash.
+    static CalendarData cd;
+    bool ok = ctx.calendar.fetch(cd);
+    ctx.calendar.releaseWifi();
+    char msg[48];
+    if (ok) snprintf(msg, sizeof(msg), tr(Str::cal_test_ok_fmt), static_cast<int>(cd.count));
+    else    snprintf(msg, sizeof(msg), "%s", tr(Str::cal_ha_error));
+    toast(msg);
+}
+
 void SettingsApp::onSectionTouch(int16_t x, int16_t y, AppContext& ctx) {
+    if (picking_calendar_) {
+        if (y >= 80) {
+            int idx = (y - 80) / 80;
+            if (idx >= 0 && idx < static_cast<int>(pick_list_.size())) {
+                ctx.config.setCalendarEntity(pick_list_[idx].entity_id);
+                picking_calendar_ = false;
+                rebuildRows(ctx);
+                renderSection(ctx);
+            }
+        }
+        return;
+    }
     if (kb_.isOpen()) {
         // Forward to keyboard first. Keyboard::onTouch returns false when the
         // tap is above kKbTop — i.e. the user tapped the section UI (a row)
@@ -349,6 +434,8 @@ void SettingsApp::onSectionTouch(int16_t x, int16_t y, AppContext& ctx) {
         rebuildRows(ctx); renderSection(ctx);
     }
     else if (r.field_key == "wx_update") { weatherUpdate(ctx); }
+    else if (r.field_key == "cal_pick") { calendarPick(ctx); }
+    else if (r.field_key == "cal_test") { calendarTest(ctx); }
     else if (r.field_key == "lang_ru") {
         ctx.config.setLanguage(0); i18nSetLang(Lang::Ru);
         rebuildRows(ctx); renderSection(ctx);
@@ -396,6 +483,11 @@ void SettingsApp::onInput(const InputEvent& e, AppContext& ctx) {
 }
 
 bool SettingsApp::onBack(AppContext& ctx) {
+    if (picking_calendar_) {            // пикер → назад в секцию
+        picking_calendar_ = false;
+        renderSection(ctx);
+        return true;
+    }
     if (kb_.isOpen()) {                 // close the keyboard first
         kb_.close();
         renderSection(ctx);

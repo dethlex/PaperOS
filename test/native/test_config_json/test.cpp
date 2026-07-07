@@ -13,6 +13,10 @@ void test_roundtrip() {
     a.tzOffsetHours=5; a.weatherLat="55.7"; a.weatherLon="37.6";
     a.weatherRefreshMin=15; a.indoorTempOffset=-3;
     a.fontSize=2; a.marginPx=32; a.screensaverIdleS=600; a.photoRotateMin=60;
+    a.printerPowerDevice = "sonoff";
+    a.printerPreheatNozzle = 215;
+    a.printerPreheatBed = 65;
+    a.calendarEntity = "calendar.lexis";
     Config b;  // defaults
     TEST_ASSERT_TRUE(parseConfigMerge(serializeConfig(a), b));
     TEST_ASSERT_EQUAL_STRING("net", b.wifiSsid.c_str());
@@ -28,15 +32,21 @@ void test_roundtrip() {
     TEST_ASSERT_EQUAL_UINT8(32, b.marginPx);
     TEST_ASSERT_EQUAL_UINT16(600, b.screensaverIdleS);
     TEST_ASSERT_EQUAL_UINT16(60, b.photoRotateMin);
+    TEST_ASSERT_EQUAL_STRING("sonoff", b.printerPowerDevice.c_str());
+    TEST_ASSERT_EQUAL_INT(215, b.printerPreheatNozzle);
+    TEST_ASSERT_EQUAL_INT(65, b.printerPreheatBed);
+    TEST_ASSERT_EQUAL_STRING("calendar.lexis", b.calendarEntity.c_str());
 }
 void test_partial_merge_keeps_base() {
     Config base; base.wifiSsid="keep"; base.haToken="keeptok"; base.tzOffsetHours=2;
+    base.calendarEntity = "calendar.keep";
     const char* j = R"({"wifi":{"ssid":"newnet"},"weather":{"lat":"10.0"}})";
     TEST_ASSERT_TRUE(parseConfigMerge(j, base));
     TEST_ASSERT_EQUAL_STRING("newnet", base.wifiSsid.c_str());
     TEST_ASSERT_EQUAL_STRING("keeptok", base.haToken.c_str());
     TEST_ASSERT_EQUAL_INT8(2, base.tzOffsetHours);
     TEST_ASSERT_EQUAL_STRING("10.0", base.weatherLat.c_str());
+    TEST_ASSERT_EQUAL_STRING("calendar.keep", base.calendarEntity.c_str());
 }
 void test_empty_string_keeps_base() {
     Config base; base.wifiSsid="keep";
@@ -97,6 +107,34 @@ void test_language_roundtrip() {
     TEST_ASSERT_EQUAL_UINT8(0, rback.language);
 }
 
+void test_printer_block_roundtrip() {
+    Config a;
+    a.printerUrl = "http://raspberrypi.local";
+    a.printerApiKey = "secretkey";
+    a.printerLightName = "LED_Light";
+    a.printerLightOn = "SET_LED LED=LED_Light WHITE=1";
+    a.printerLightOff = "SET_LED LED=LED_Light WHITE=0";
+    Config b;
+    TEST_ASSERT_TRUE(parseConfigMerge(serializeConfig(a), b));
+    TEST_ASSERT_EQUAL_STRING("http://raspberrypi.local", b.printerUrl.c_str());
+    TEST_ASSERT_EQUAL_STRING("secretkey", b.printerApiKey.c_str());
+    TEST_ASSERT_EQUAL_STRING("LED_Light", b.printerLightName.c_str());
+    TEST_ASSERT_EQUAL_STRING("SET_LED LED=LED_Light WHITE=1", b.printerLightOn.c_str());
+    TEST_ASSERT_EQUAL_STRING("SET_LED LED=LED_Light WHITE=0", b.printerLightOff.c_str());
+}
+void test_printer_partial_merge_keeps_base() {
+    Config base; base.printerApiKey = "keepkey";
+    TEST_ASSERT_TRUE(parseConfigMerge(R"({"printer":{"url":"http://x"}})", base));
+    TEST_ASSERT_EQUAL_STRING("http://x", base.printerUrl.c_str());
+    TEST_ASSERT_EQUAL_STRING("keepkey", base.printerApiKey.c_str());
+}
+void test_preheat_defaults() {
+    Config c;  // defaults
+    TEST_ASSERT_EQUAL_INT(200, c.printerPreheatNozzle);
+    TEST_ASSERT_EQUAL_INT(60, c.printerPreheatBed);
+    TEST_ASSERT_EQUAL_STRING("", c.printerPowerDevice.c_str());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_roundtrip);
@@ -108,5 +146,8 @@ int main() {
     RUN_TEST(test_bad_json_false_unchanged);
     RUN_TEST(test_serialize_has_all_sections);
     RUN_TEST(test_language_roundtrip);
+    RUN_TEST(test_printer_block_roundtrip);
+    RUN_TEST(test_printer_partial_merge_keeps_base);
+    RUN_TEST(test_preheat_defaults);
     return UNITY_END();
 }

@@ -53,14 +53,10 @@ void Launcher::enter(AppContext& ctx) {
     int16_t x = margin, y = top;
     int col = 0;
     for (const auto& id : order) {
-        const char* lbl =
-            id == "reader"     ? tr(Str::app_reader) :
-            id == "ha"         ? tr(Str::app_ha) :
-            id == "weather"    ? tr(Str::app_weather) :
-            id == "games"      ? tr(Str::app_games) :
-            id == "settings"   ? tr(Str::app_settings) :
-            id == "fileserver" ? tr(Str::app_files) : nullptr;
-        std::string label = lbl ? std::string(lbl) : id;   // fallback: id as its own label
+        // Single source of truth for the tile label is the app's own title()
+        // (resolved via the switcher). No parallel id->Str map to forget: a new
+        // app is localized automatically because IApp::title() is pure-virtual.
+        std::string label = ctx.switcher.titleOf(id);
         cards_.push_back({id, label, {x, y, card_w, card_h}});
         if (++col == 2) { col = 0; x = margin; y += card_h + gap; }
         else            { x += card_w + gap; }

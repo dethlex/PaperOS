@@ -19,7 +19,15 @@ void WeatherApp::enter(AppContext& ctx) {
     offline_ = false;
     ctx.weather.loadCache(data_);   // instant; data_.valid may be false
     render(ctx);                    // show cached (or empty) immediately
-    refresh(ctx);                   // then go online
+    // Freshness gate: skip the blocking WiFi round entirely when the cache is
+    // younger than the refresh interval (e.g. the screensaver just fetched
+    // it). A manual tap still forces a refresh (onInput).
+    uint32_t now  = static_cast<uint32_t>(ctx.rtc.nowUnix());
+    uint16_t rmin = ctx.config.weatherRefreshMin();
+    if (rmin == 0) rmin = 30;
+    bool fresh = data_.valid && now >= data_.fetched_unix &&
+                 (now - data_.fetched_unix) < static_cast<uint32_t>(rmin) * 60U;
+    if (!fresh) refresh(ctx);
 }
 
 void WeatherApp::leave(AppContext& ctx) {

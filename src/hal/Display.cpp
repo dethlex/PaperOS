@@ -32,7 +32,7 @@ void Display::wake() {
     if (initialized_) return;                // already up
     M5.enableEPDPower();                      // GPIO23 HIGH — restore IT8951/EPD rail
     M5.enableEXTPower();                      // GPIO5 HIGH — restore EXT/Grove boost
-    delay(1000);                              // rail settle (matches M5.begin before EPD.begin)
+    delay(kEpdWakeSettleMs);                  // rail settle (see Display.h note)
     // Re-run the IT8951 driver init. Safe to re-call (no guard, SPI.begin twice
     // is OK); reloads SYS_RUN + VCOM. _tar_memaddr survives in RAM, so no
     // GetSysInfo needed. M5.begin() itself is NOT re-entrant — do not call it.

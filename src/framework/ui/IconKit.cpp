@@ -86,6 +86,57 @@ void IconKit::drop(M5EPD_Canvas& c, int x, int y, int s) {
     c.fillTriangle(cx - r, cy - r / 2, cx + r, cy - r / 2, cx, y, INK);  // pointed top
 }
 
+// ---- lightbulb: glass filled when on (with rays), outline when off;
+//      the screw base is always an outline only. ----
+void IconKit::lightbulb(M5EPD_Canvas& c, int x, int y, int s, bool on) {
+    const int cx = x + s / 2;
+    const int r  = s / 4;                 // glass radius (room left for top rays)
+    const int cy = y + s * 9 / 20;        // glass center
+    const int bw = r;                     // screw base width
+    const int bx = cx - bw / 2;
+    const int by = cy + r - s / 20;       // base sits just under the glass
+    const int bh = s / 5;
+    // glass: filled when lit, outline when off
+    if (on) c.fillCircle(cx, cy, r, INK);
+    else    c.drawCircle(cx, cy, r, INK);
+    // screw base — always outline only (never filled)
+    c.drawRect(bx, by, bw, bh, INK);
+    c.drawLine(bx, by + bh / 2, bx + bw, by + bh / 2, INK);   // screw groove
+    // rays when lit — top + sides only, none through the base
+    if (on) {
+        const int rays[] = {0, 180, 225, 270, 315};          // right, left, up-diag, up, up-diag
+        for (int i = 0; i < 5; ++i) {
+            float rad = rays[i] * 3.14159265f / 180.0f;
+            int x1 = cx + (int)((r + s / 20) * cosf(rad));
+            int y1 = cy + (int)((r + s / 20) * sinf(rad));
+            int x2 = cx + (int)((r + s / 20 + s / 8) * cosf(rad));
+            int y2 = cy + (int)((r + s / 20 + s / 8) * sinf(rad));
+            c.drawLine(x1, y1, x2, y2, INK);
+        }
+    }
+}
+
+// ---- power symbol: ring with a stem through the top gap ----
+void IconKit::power(M5EPD_Canvas& c, int x, int y, int s, bool on) {
+    const int cx = x + s / 2, cy = y + s / 2 + s / 20;
+    const int r = s * 2 / 5;
+    const int stemW = s / 8 < 2 ? 2 : s / 8;
+    const int stemTop = y;
+    const int stemBot = cy - r / 4;
+    if (on) {
+        c.fillCircle(cx, cy, r, INK);
+        // white slot so the stem reads inside the filled disc
+        c.fillRect(cx - stemW, stemTop, stemW * 2, stemBot - stemTop, 0);
+    } else {
+        c.drawCircle(cx, cy, r, INK);
+        c.drawCircle(cx, cy, r - 1, INK);
+        // erase the top arc to make the classic gap
+        c.fillRect(cx - stemW, cy - r - 2, stemW * 2, r / 2, 0);
+    }
+    // stem (ink) through the gap / slot
+    c.fillRect(cx - stemW / 2, stemTop, stemW, stemBot - stemTop, INK);
+}
+
 // ---- battery (migrated 1:1 from BatteryIcon::draw) ----
 void IconKit::battery(M5EPD_Canvas& c, int x, int y, int w, int h, uint8_t percent) {
     if (percent > 100) percent = 100;
@@ -156,6 +207,19 @@ static void glyphFolder(M5EPD_Canvas& c, int x, int y, int s) {
     c.drawRect(fx, fy, fw, fh, INK);                          // body
 }
 
+// Календарный лист: рамка, шапка, два кольца сверху, крупная клетка-день.
+static void glyphCalendar(M5EPD_Canvas& c, int x, int y, int s) {
+    int w = s, h = s;
+    int header = s / 4;
+    c.drawRect(x, y + s / 8, w, h - s / 8, INK);
+    c.fillRect(x, y + s / 8, w, header, INK);                    // шапка
+    c.fillRect(x + s / 4 - s / 24, y, s / 12, s / 5, INK);       // кольцо левое
+    c.fillRect(x + 3 * s / 4 - s / 24, y, s / 12, s / 5, INK);   // кольцо правое
+    int cell = s / 3;
+    c.drawRect(x + (w - cell) / 2, y + s / 8 + header + (h - s / 8 - header - cell) / 2,
+               cell, cell, INK);                                  // «число»
+}
+
 static void glyphCloudSun(M5EPD_Canvas& c, int x, int y, int s) {
     int cx = x + s * 2 / 5, cy = y + s * 2 / 5, r = s / 6;
     c.fillCircle(cx, cy, r, INK);                             // sun
@@ -174,6 +238,33 @@ static void glyphTile(M5EPD_Canvas& c, int x, int y, int s) {
     int m = s / 5;
     c.drawRect(x + m, y + m, s - 2 * m, s - 2 * m, INK);
     c.fillCircle(x + s / 2, y + s / 2, s / 12, INK);
+}
+
+static void glyphPrinter(M5EPD_Canvas& c, int x, int y, int s) {
+    // FDM 3D-printer: open frame + gantry, hotend with nozzle, bed, printed part.
+    int m  = s / 12;
+    int fx = x + m, fy = y + m;
+    int fw = s - 2 * m;                              // frame is square (fw x fw)
+    c.drawRect(fx, fy, fw, fw, INK);                 // printer frame
+
+    int gy = fy + fw / 3;                            // gantry bar
+    c.drawLine(fx, gy,     fx + fw, gy,     INK);
+    c.drawLine(fx, gy + 1, fx + fw, gy + 1, INK);    // 2px stroke
+
+    int bw = fw / 5, bh = fw / 7;                    // hotend carriage, straddling the gantry
+    int bx = fx + (fw - bw) / 2;
+    int by = gy - bh / 2;
+    c.fillRect(bx, by, bw, bh, INK);
+
+    int cx = fx + fw / 2;                            // nozzle tip below the carriage
+    c.fillTriangle(cx - fw / 18, by + bh, cx + fw / 18, by + bh, cx, by + bh + fw / 8, INK);
+
+    int bedH = fw / 16; if (bedH < 2) bedH = 2;      // bed plate near the bottom
+    int bedY = fy + fw - fw / 6;
+    c.fillRect(fx + fw / 9, bedY, fw - 2 * (fw / 9), bedH, INK);
+
+    int ow = fw / 5, oh = fw / 6;                    // small printed object on the bed
+    c.fillRect(fx + (fw - ow) / 2, bedY - oh, ow, oh, INK);
 }
 
 static void glyphDice(M5EPD_Canvas& c, int x, int y, int s) {
@@ -251,9 +342,11 @@ void IconKit::app(M5EPD_Canvas& c, const std::string& id, int x, int y, int s) {
     if      (id == "reader")     glyphBook(c, x, y, s);
     else if (id == "ha")         house(c, x, y, s);
     else if (id == "weather")    glyphCloudSun(c, x, y, s);
+    else if (id == "calendar")   glyphCalendar(c, x, y, s);
     else if (id == "settings")   glyphGear(c, x, y, s);
     else if (id == "fileserver") glyphFolder(c, x, y, s);
     else if (id == "games")            glyphDice(c, x, y, s);
+    else if (id == "printer")          glyphPrinter(c, x, y, s);
     else if (id == "game_tictactoe")   glyphTicTac(c, x, y, s);
     else if (id == "game_minesweeper") glyphMine(c, x, y, s);
     else if (id == "game_fifteen")     glyphFifteen(c, x, y, s);

@@ -19,6 +19,17 @@ std::string serializeConfig(const Config& c) {
     auto ss = doc["screensaver"].to<JsonObject>();
     ss["idle_s"] = c.screensaverIdleS; ss["rotate_min"] = c.photoRotateMin;
     doc["language"] = (c.language == 1) ? "en" : "ru";
+    auto pr = doc["printer"].to<JsonObject>();
+    pr["url"] = c.printerUrl;
+    pr["api_key"] = c.printerApiKey;
+    pr["light_name"] = c.printerLightName;
+    pr["light_on"] = c.printerLightOn;
+    pr["light_off"] = c.printerLightOff;
+    pr["power_device"] = c.printerPowerDevice;
+    pr["preheat_nozzle"] = c.printerPreheatNozzle;
+    pr["preheat_bed"] = c.printerPreheatBed;
+    auto cal = doc["calendar"].to<JsonObject>();
+    cal["entity"] = c.calendarEntity;
 
     std::string out;
     serializeJsonPretty(doc, out);
@@ -37,8 +48,15 @@ bool parseConfigMerge(const std::string& json, Config& io) {
     str("wifi", "password", io.wifiPass);
     str("ha", "url", io.haUrl);
     str("ha", "token", io.haToken);
+    str("printer", "url", io.printerUrl);
+    str("printer", "api_key", io.printerApiKey);
+    str("printer", "light_name", io.printerLightName);
+    str("printer", "light_on", io.printerLightOn);
+    str("printer", "light_off", io.printerLightOff);
+    str("printer", "power_device", io.printerPowerDevice);
     str("weather", "lat", io.weatherLat);
     str("weather", "lon", io.weatherLon);
+    str("calendar", "entity", io.calendarEntity);
 
     if (doc["timezone_offset_hours"].is<int>()) {
         int t = doc["timezone_offset_hours"].as<int>();
@@ -73,6 +91,14 @@ bool parseConfigMerge(const std::string& json, Config& io) {
         const char* lng = doc["language"].as<const char*>();
         if (lng && !strcmp(lng, "en")) io.language = 1;
         else if (lng && !strcmp(lng, "ru")) io.language = 0;
+    }
+    if (doc["printer"]["preheat_nozzle"].is<int>()) {
+        int n = doc["printer"]["preheat_nozzle"].as<int>();
+        if (n >= 0 && n <= 350) io.printerPreheatNozzle = n;
+    }
+    if (doc["printer"]["preheat_bed"].is<int>()) {
+        int b = doc["printer"]["preheat_bed"].as<int>();
+        if (b >= 0 && b <= 150) io.printerPreheatBed = b;
     }
     return true;
 }

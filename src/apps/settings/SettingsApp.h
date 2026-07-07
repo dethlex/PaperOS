@@ -2,6 +2,7 @@
 #include "framework/App.h"
 #include "framework/ui/Keyboard.h"
 #include "i18n/Strings.h"
+#include "services/CalendarData.h"
 #include <string>
 #include <vector>
 
@@ -18,7 +19,7 @@ public:
 private:
     enum class Section {
         Index,
-        Wifi, Ha, Reader, Time, Screensaver, Weather, Language, About
+        Wifi, Ha, Reader, Time, Screensaver, Weather, Calendar, Language, About
     };
     Section section_ = Section::Index;
 
@@ -33,6 +34,9 @@ private:
     struct Row { std::string label; std::string value; std::string field_key; bool mask; };
     std::vector<Row> rows_;
 
+    bool picking_calendar_ = false;            // открыт пикер сущностей
+    std::vector<CalendarInfo> pick_list_;      // ответ /api/calendars
+
     void renderIndex(AppContext& ctx);
     void renderSection(AppContext& ctx);
     void onIndexTouch(int16_t x, int16_t y, AppContext& ctx);
@@ -43,6 +47,9 @@ private:
     void wifiTest(AppContext& ctx);
     void haTest(AppContext& ctx);
     void weatherUpdate(AppContext& ctx);
+    void calendarPick(AppContext& ctx);        // загрузить список + открыть пикер
+    void renderCalendarPicker(AppContext& ctx);
+    void calendarTest(AppContext& ctx);        // fetch + toast с числом событий
 };
 
 } // namespace paperos
