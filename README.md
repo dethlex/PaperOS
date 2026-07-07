@@ -4,8 +4,9 @@
 
 PaperOS turns the M5Paper (ESP32 + 4.7" 540×960 grayscale e-ink) into a always‑on,
 battery‑friendly desk companion: an e‑reader, a Home Assistant remote, a weather
-station, a small games console, and a network file drive — all reachable from a single
-touch launcher and driven by the three hardware buttons.
+station, a calendar agenda, a 3D‑printer console, a small games console, and a network
+file drive — all reachable from a single touch launcher and driven by the three hardware
+buttons.
 
 It is written in modern C++17 on Arduino‑ESP32, builds with PlatformIO, and is designed
 around a clean four‑layer architecture so the bulk of its logic runs as host unit tests
@@ -68,6 +69,27 @@ Local + indoor weather without any account.
 - Refreshes on open and shows a "last updated HH:MM" stamp.
 - A combined outdoor/indoor/battery panel also appears on the lock screen.
 
+### 📅 Calendar
+A read‑only agenda — today plus the next 7 days — for one Google calendar, sourced through
+Home Assistant's REST API (`/api/calendars/<entity>`), so HA does the recurrence expansion
+and timezone handling.
+- The calendar entity is chosen from a picker in **Settings** (populated from
+  `GET /api/calendars`).
+- Events are cached in NVS and refreshed in the same WiFi window as the weather (at boot and
+  on the screensaver's refresh boundary) — no extra radio time.
+- The next upcoming event is shown as a line under the lock‑screen clock.
+
+### 🖨 Printer (Klipper / Moonraker)
+Monitor and drive a 3D printer running Klipper via its Moonraker API.
+- **While printing** — live status: state, file‑relative progress, nozzle/bed temperatures,
+  time + ETA, current layer, file name, and the sliced model thumbnail.
+- **While idle** — a scrollable control deck: printer power (Moonraker `device_power`,
+  auto‑discovered), Klipper LED light, XYZ jog (10 mm) + Home with axis gating, preheat /
+  cooldown presets, and reprint from the print history.
+- Every intervening action (cancel, pause, power‑off, start‑from‑history) is confirmed with an
+  on‑screen dialog. Configuration (printer URL, optional API key, presets) lives in a
+  `printer` block in `config.json`.
+
 ### 🎮 Games
 Four self‑contained games, no saves, no animations — just paper‑friendly puzzles.
 - **Tic‑Tac‑Toe** — vs. a minimax AI or two‑player.
@@ -82,7 +104,8 @@ On‑device configuration via an **on‑screen keyboard** (English / Russian / s
 shift and icon keys for backspace/shift):
 - **WiFi**, **Home Assistant** (URL + token), **Reading** (font size, margins),
   **Time** (UTC offset, NTP sync), **Screensaver** (idle timeout, photo rotation),
-  **Weather** (coordinates, refresh interval, indoor offset), **Language**, **About**.
+  **Weather** (coordinates, refresh interval, indoor offset), **Calendar** (entity picker),
+  **Language**, **About**.
 - Two‑way **`config.json` sync**: edits in the UI are written back to the card, and the
   card's values are imported on boot or on demand.
 - *About* shows the firmware version (derived from the git tag at build time).
@@ -121,8 +144,11 @@ PaperOS deliberately uses **light sleep**, not deep sleep:
   `M5.shutdown()` would strand the unit. The screensaver's light‑sleep loop is the low‑power
   state instead.
 - During sleep the e‑ink panel is powered down (its rail is separate from the main latch),
-  giving an EPD duty cycle of roughly 3 s per minute and an estimated battery life measured
-  in months. The displayed frame persists on the panel for free.
+  and the displayed frame persists on the panel for free. Battery life is measured in months.
+- The per‑minute wake is tuned to stay short: the loop runs at **80 MHz** (240 MHz only for the
+  WiFi refresh window), the decoded wallpaper is cached in PSRAM instead of re‑decoded from SD,
+  glyph renders are reused across ticks, the weather panel is repainted only when its data
+  changed, and photo rotation happens strictly on its configured interval rather than every wake.
 
 ---
 
@@ -254,6 +280,8 @@ on a computer. Secrets live here (and only here, on the card).
   "weather": { "lat": "52.52", "lon": "13.41", "refresh_min": 30, "indoor_offset": -2 },
   "reader":  { "font_size": 1, "margin_px": 24 },
   "screensaver": { "idle_s": 300, "rotate_min": 30 },
+  "calendar": { "entity": "calendar.personal" },
+  "printer": { "url": "http://192.168.1.50", "api_key": "", "power_device": "", "preheat_nozzle": 200, "preheat_bed": 60 },
   "language": "en"
 }
 ```
@@ -289,7 +317,7 @@ src/
   hal/          Hardware abstraction (Display, Touch, Buttons, Rtc, Sd, Wifi, Sht30, Battery, Nvs)
   services/     ConfigStore, WeatherService, HAClient, Power, WebDavServer, BookIndex, ...
   framework/    AppSwitcher, InputRouter, App contract, UI helpers (Fonts, IconKit, Keyboard)
-  apps/         launcher, reader, ha, weather, games, settings, screensaver, fileserver
+  apps/         launcher, reader, ha, weather, calendar, printer, games, settings, screensaver, fileserver
   i18n/         Compile-time string tables + tr(); RU/EN
   util/         Pure helpers (encoding detection, WMO codes, battery curve, WebDAV paths, ...)
   main.cpp      Boot, app registration, the cooperative loop
